@@ -3,1045 +3,572 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>WIRED // MOVEMENT</title>
+<title>WIRED // PARKOUR</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap');
-
-  :root {
-    --lain-bg: #000005;
-    --lain-dark: #02020f;
-    --lain-blue: #0a0a2e;
-    --lain-cyan: #00f0ff;
-    --lain-purple: #7a00ff;
-    --lain-red: #ff003c;
-    --lain-white: #c8d8ff;
-    --lain-dim: #1a1a3a;
-    --lain-grid: rgba(0,240,255,0.05);
-    --scanline: rgba(0,0,0,0.4);
+  :root { --cyan:#00f0ff; --purple:#7a00ff; --red:#ff003c; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#000008; overflow:hidden; font-family:'Share Tech Mono',monospace; color:var(--cyan); user-select:none; }
+  canvas { display:block; position:absolute; top:0; left:0; }
+  #crt {
+    position:absolute; inset:0; pointer-events:none; z-index:20;
+    background:
+      repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.26) 2px,rgba(0,0,0,.26) 4px),
+      radial-gradient(ellipse at center,transparent 52%,rgba(0,0,14,.85) 100%);
   }
-
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-
-  body {
-    background: var(--lain-bg);
-    overflow: hidden;
-    font-family: 'Share Tech Mono', monospace;
-    color: var(--lain-cyan);
-    user-select: none;
+  #hud { position:absolute; inset:0; pointer-events:none; z-index:15; }
+  #topbar {
+    position:absolute; top:0; left:0; right:0; height:38px;
+    display:flex; align-items:center; justify-content:space-between; padding:0 18px;
+    border-bottom:1px solid rgba(0,240,255,.08);
+    background:linear-gradient(180deg,rgba(0,0,18,.85) 0%,transparent 100%);
+    font-size:11px; letter-spacing:3px; color:rgba(0,240,255,.4);
   }
-
-  canvas {
-    display: block;
-    position: absolute;
-    top: 0; left: 0;
+  #topbar .T { font-family:'VT323',monospace; font-size:22px; color:var(--cyan); text-shadow:0 0 12px var(--cyan); letter-spacing:7px; }
+  #xhair {
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    width:4px; height:4px; background:rgba(0,240,255,.85); border-radius:50%;
+    box-shadow:0 0 7px var(--cyan);
   }
-
-  #overlay {
-    position: absolute;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    pointer-events: none;
-    z-index: 10;
+  #spd {
+    position:absolute; bottom:52px; left:50%; transform:translateX(-50%);
+    text-align:center; font-family:'VT323',monospace; font-size:54px;
+    color:var(--cyan); text-shadow:0 0 14px var(--cyan); letter-spacing:4px;
+    transition:color .1s,text-shadow .1s;
   }
-
-  /* Scanlines */
-  #overlay::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 2px,
-      var(--scanline) 2px,
-      var(--scanline) 4px
-    );
-    pointer-events: none;
-    z-index: 20;
-    opacity: 0.3;
+  #spd .lbl { display:block; font-family:'Share Tech Mono',monospace; font-size:10px; letter-spacing:7px; color:rgba(0,240,255,.3); margin-bottom:-4px; }
+  #spdbar-wrap {
+    position:absolute; bottom:36px; left:50%; transform:translateX(-50%);
+    width:260px; height:2px; background:rgba(0,240,255,.07); border:1px solid rgba(0,240,255,.13);
   }
-
-  /* CRT vignette */
-  #overlay::after {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: radial-gradient(ellipse at center,
-      transparent 50%,
-      rgba(0,0,10,0.8) 100%
-    );
-    pointer-events: none;
-    z-index: 21;
+  #spdbar { height:100%; width:0%; background:var(--cyan); box-shadow:0 0 8px var(--cyan); transition:width .04s,background .1s,box-shadow .1s; }
+  #strafe-wrap { position:absolute; bottom:44px; left:50%; transform:translateX(-50%); width:180px; height:2px; display:flex; gap:2px; }
+  .sb { flex:1; height:100%; background:rgba(0,240,255,.07); transition:background .05s,box-shadow .05s; }
+  .sb.on { background:var(--cyan); box-shadow:0 0 5px var(--cyan); }
+  #combo { position:absolute; top:46px; right:18px; font-family:'VT323',monospace; text-align:right; line-height:1; }
+  #combo .n { font-size:72px; color:var(--purple); text-shadow:0 0 24px var(--purple); }
+  #combo .l { font-size:11px; letter-spacing:4px; color:rgba(122,0,255,.4); font-family:'Share Tech Mono',monospace; }
+  #airstat { position:absolute; top:46px; left:18px; font-size:10px; letter-spacing:2px; color:rgba(0,240,255,.22); line-height:2.1; }
+  #airstat .hi { color:rgba(0,240,255,.6); }
+  #quote { position:absolute; bottom:12px; left:50%; transform:translateX(-50%); font-family:'VT323',monospace; font-size:12px; letter-spacing:5px; color:rgba(0,240,255,.16); white-space:nowrap; }
+  .gain { position:absolute; font-family:'VT323',monospace; font-size:22px; pointer-events:none; z-index:17; animation:floatUp .9s ease-out forwards; }
+  @keyframes floatUp { 0%{opacity:1;transform:translateY(0)} 100%{opacity:0;transform:translateY(-52px)} }
+  #lockscreen {
+    position:absolute; inset:0; background:rgba(0,0,12,.96);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    z-index:100; cursor:pointer;
   }
-
-  #hud {
-    position: absolute;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    z-index: 15;
-    pointer-events: none;
+  #lockscreen h1 {
+    font-family:'VT323',monospace; font-size:clamp(56px,11vw,110px);
+    color:var(--cyan); text-shadow:0 0 40px var(--cyan),0 0 80px rgba(0,240,255,.22);
+    letter-spacing:14px; animation:flicker 5s infinite; margin-bottom:6px;
   }
-
-  #speedometer {
-    position: absolute;
-    bottom: 60px;
-    left: 50%;
-    transform: translateX(-50%);
-    text-align: center;
-    font-family: 'VT323', monospace;
-    font-size: 48px;
-    color: var(--lain-cyan);
-    text-shadow: 0 0 10px var(--lain-cyan), 0 0 30px var(--lain-cyan);
-    letter-spacing: 4px;
-  }
-
-  #speedometer .label {
-    font-size: 14px;
-    letter-spacing: 8px;
-    color: rgba(0,240,255,0.4);
-    display: block;
-    font-family: 'Share Tech Mono', monospace;
-  }
-
-  #speed-bar-container {
-    position: absolute;
-    bottom: 40px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 300px;
-    height: 3px;
-    background: rgba(0,240,255,0.1);
-    border: 1px solid rgba(0,240,255,0.2);
-  }
-
-  #speed-bar {
-    height: 100%;
-    background: var(--lain-cyan);
-    box-shadow: 0 0 8px var(--lain-cyan);
-    transition: width 0.05s, background 0.1s;
-    width: 0%;
-  }
-
-  #crosshair {
-    position: absolute;
-    top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-    width: 20px; height: 20px;
-    z-index: 16;
-  }
-
-  #crosshair::before, #crosshair::after {
-    content: '';
-    position: absolute;
-    background: rgba(0,240,255,0.7);
-    box-shadow: 0 0 4px var(--lain-cyan);
-  }
-  #crosshair::before {
-    width: 1px; height: 12px;
-    top: 4px; left: 9px;
-  }
-  #crosshair::after {
-    width: 12px; height: 1px;
-    top: 9px; left: 4px;
-  }
-
-  #top-bar {
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 20px;
-    border-bottom: 1px solid rgba(0,240,255,0.1);
-    background: linear-gradient(180deg, rgba(0,0,20,0.8) 0%, transparent 100%);
-    font-size: 11px;
-    letter-spacing: 3px;
-    color: rgba(0,240,255,0.5);
-    z-index: 16;
-  }
-
-  #top-bar .title {
-    font-family: 'VT323', monospace;
-    font-size: 22px;
-    color: var(--lain-cyan);
-    text-shadow: 0 0 10px var(--lain-cyan);
-    letter-spacing: 6px;
-  }
-
-  #bhop-counter {
-    position: absolute;
-    top: 50px;
-    right: 20px;
-    text-align: right;
-    font-family: 'VT323', monospace;
-    z-index: 16;
-  }
-
-  #bhop-counter .num {
-    font-size: 64px;
-    color: var(--lain-purple);
-    text-shadow: 0 0 20px var(--lain-purple);
-    display: block;
-    line-height: 1;
-  }
-
-  #bhop-counter .lbl {
-    font-size: 12px;
-    letter-spacing: 4px;
-    color: rgba(122,0,255,0.5);
-    font-family: 'Share Tech Mono', monospace;
-  }
-
-  #strafe-indicator {
-    position: absolute;
-    bottom: 80px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 200px;
-    display: flex;
-    gap: 4px;
-    z-index: 16;
-  }
-
-  .strafe-dot {
-    flex: 1;
-    height: 3px;
-    background: rgba(0,240,255,0.1);
-    transition: background 0.05s, box-shadow 0.05s;
-  }
-
-  .strafe-dot.active {
-    background: var(--lain-cyan);
-    box-shadow: 0 0 6px var(--lain-cyan);
-  }
-
-  #lain-text {
-    position: absolute;
-    bottom: 15px;
-    left: 50%;
-    transform: translateX(-50%);
-    font-family: 'VT323', monospace;
-    font-size: 13px;
-    letter-spacing: 5px;
-    color: rgba(0,240,255,0.25);
-    white-space: nowrap;
-    z-index: 16;
-  }
-
-  #controls-hint {
-    position: absolute;
-    top: 50px;
-    left: 20px;
-    font-size: 10px;
-    letter-spacing: 2px;
-    color: rgba(0,240,255,0.25);
-    line-height: 2;
-    z-index: 16;
-  }
-
-  #lock-screen {
-    position: absolute;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    background: rgba(0,0,10,0.95);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    z-index: 100;
-    cursor: pointer;
-  }
-
-  #lock-screen .main-title {
-    font-family: 'VT323', monospace;
-    font-size: clamp(48px, 10vw, 96px);
-    color: var(--lain-cyan);
-    text-shadow: 0 0 30px var(--lain-cyan), 0 0 60px rgba(0,240,255,0.3);
-    letter-spacing: 12px;
-    animation: flicker 4s infinite;
-    margin-bottom: 10px;
-  }
-
-  #lock-screen .subtitle {
-    font-family: 'Share Tech Mono', monospace;
-    font-size: 12px;
-    color: rgba(0,240,255,0.4);
-    letter-spacing: 8px;
-    margin-bottom: 60px;
-  }
-
-  #lock-screen .click-prompt {
-    font-family: 'VT323', monospace;
-    font-size: 28px;
-    color: var(--lain-purple);
-    letter-spacing: 6px;
-    text-shadow: 0 0 15px var(--lain-purple);
-    animation: pulse 1.5s ease-in-out infinite;
-  }
-
-  #lock-screen .controls-info {
-    position: absolute;
-    bottom: 40px;
-    font-size: 11px;
-    letter-spacing: 3px;
-    color: rgba(0,240,255,0.2);
-    text-align: center;
-    line-height: 2.2;
-  }
-
-  #lock-screen .controls-info span {
-    color: rgba(0,240,255,0.5);
-  }
-
-  @keyframes flicker {
-    0%, 95%, 100% { opacity: 1; }
-    96% { opacity: 0.7; }
-    97% { opacity: 1; }
-    98% { opacity: 0.4; }
-    99% { opacity: 1; }
-  }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 0.4; }
-    50% { opacity: 1; }
-  }
-
-  #glitch-overlay {
-    position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
-    pointer-events: none;
-    z-index: 50;
-    opacity: 0;
-  }
-
-  .strafe-gain {
-    position: absolute;
-    font-family: 'VT323', monospace;
-    font-size: 20px;
-    color: var(--lain-cyan);
-    text-shadow: 0 0 8px var(--lain-cyan);
-    pointer-events: none;
-    z-index: 17;
-    animation: floatUp 0.8s ease-out forwards;
-  }
-
-  @keyframes floatUp {
-    0% { opacity: 1; transform: translateY(0); }
-    100% { opacity: 0; transform: translateY(-40px); }
-  }
+  #lockscreen .sub { font-size:11px; letter-spacing:9px; color:rgba(0,240,255,.32); margin-bottom:50px; }
+  #lockscreen .btn { font-family:'VT323',monospace; font-size:30px; letter-spacing:7px; color:var(--purple); text-shadow:0 0 18px var(--purple); animation:pulse 1.6s ease-in-out infinite; }
+  #lockscreen .tips { position:absolute; bottom:34px; text-align:center; font-size:11px; letter-spacing:3px; color:rgba(0,240,255,.17); line-height:2.4; }
+  #lockscreen .tips b { color:rgba(0,240,255,.52); font-weight:normal; }
+  @keyframes flicker { 0%,94%,100%{opacity:1} 95%{opacity:.55} 96%{opacity:1} 97.5%{opacity:.28} 98.5%{opacity:1} }
+  @keyframes pulse { 0%,100%{opacity:.32} 50%{opacity:1} }
+  #glitch { position:absolute; inset:0; pointer-events:none; z-index:50; opacity:0; }
 </style>
 </head>
 <body>
-
-<canvas id="gameCanvas"></canvas>
-<div id="overlay"></div>
-<div id="glitch-overlay"></div>
-
+<canvas id="c"></canvas>
+<div id="crt"></div>
+<div id="glitch"></div>
 <div id="hud">
-  <div id="top-bar">
-    <div>SYS::WIRED</div>
-    <div class="title">MOVEMENT</div>
-    <div id="fps-counter">00 FPS</div>
+  <div id="topbar">
+    <span>SYS::WIRED</span>
+    <span class="T">PARKOUR</span>
+    <span id="fps">-- FPS</span>
   </div>
-
-  <div id="controls-hint">
-    WASD — MOVE<br>
-    SPACE — JUMP<br>
-    MOUSE — LOOK<br>
-    SHIFT — SPRINT<br>
-    <br>
-    <span style="color:rgba(122,0,255,0.4)">BHOP: SPAM SPACE</span><br>
-    <span style="color:rgba(122,0,255,0.4)">AIR STRAFE: A/D</span>
+  <div id="airstat">
+    <span id="gndtxt" class="hi">GROUNDED</span><br>
+    SPD <span id="spd2">0</span> &nbsp; BHOP <span id="bhopsmall">0</span>
   </div>
-
-  <div id="bhop-counter">
-    <span class="num" id="bhop-num">0</span>
-    <span class="lbl">BHOPS</span>
+  <div id="combo"><div class="n" id="combon">0</div><div class="l">COMBO</div></div>
+  <div id="xhair"></div>
+  <div id="strafe-wrap">
+    <div class="sb" id="sl"></div><div class="sb" id="sc"></div><div class="sb" id="sr"></div>
   </div>
-
-  <div id="crosshair"></div>
-
-  <div id="strafe-indicator">
-    <div class="strafe-dot" id="sd-left"></div>
-    <div class="strafe-dot" id="sd-center"></div>
-    <div class="strafe-dot" id="sd-right"></div>
-  </div>
-
-  <div id="speedometer">
-    <span class="label">UNITS/S</span>
-    <span id="speed-val">000</span>
-  </div>
-
-  <div id="speed-bar-container">
-    <div id="speed-bar"></div>
-  </div>
-
-  <div id="lain-text">PRESENT_DAY . PRESENT_TIME . ARE_YOU_CONNECTED</div>
+  <div id="spd"><span class="lbl">UNITS/S</span><span id="spdnum">000</span></div>
+  <div id="spdbar-wrap"><div id="spdbar"></div></div>
+  <div id="quote">PRESENT_DAY · PRESENT_TIME · ARE_YOU_CONNECTED_TO_THE_WIRED</div>
 </div>
-
-<div id="lock-screen">
-  <div class="main-title">WIRED</div>
-  <div class="subtitle">MOVEMENT SYSTEM v1.6</div>
-  <div class="click-prompt">[ CLICK TO CONNECT ]</div>
-  <div class="controls-info">
-    <span>WASD</span> MOVE &nbsp;|&nbsp; <span>SPACE</span> JUMP &nbsp;|&nbsp; <span>MOUSE</span> LOOK<br>
-    <span>SHIFT</span> SPRINT &nbsp;|&nbsp; <span>A/D IN AIR</span> AIR STRAFE<br>
-    BUNNYHOP: LAND + JUMP + STRAFE = INFINITE SPEED<br>
+<div id="lockscreen">
+  <h1>WIRED</h1>
+  <div class="sub">PARKOUR SYSTEM v2.0</div>
+  <div class="btn" id="btntext">[ CLICK TO CONNECT ]</div>
+  <div class="tips">
+    <b>WASD</b> MOVE &nbsp;·&nbsp; <b>SPACE</b> or <b>SCROLL UP</b> JUMP<br>
+    <b>MOUSE</b> LOOK &nbsp;·&nbsp; <b>SHIFT</b> SPRINT<br>
+    <b>A / D IN AIR + SWING MOUSE</b> → AIR STRAFE (gains speed!)<br>
+    <b>LAND + JUMP INSTANTLY</b> → BHOP (keeps momentum!)<br>
     <br>
-    <span style="color:rgba(0,240,255,0.15)">THE WIRED IS ALL AROUND YOU</span>
+    <span style="color:rgba(0,240,255,.08)">THE WIRED DOES NOT FORGET YOUR VELOCITY</span>
   </div>
 </div>
 
 <script>
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
-const lockScreen = document.getElementById('lock-screen');
-const speedVal = document.getElementById('speed-val');
-const speedBar = document.getElementById('speed-bar');
-const bhopNum = document.getElementById('bhop-num');
-const fpsCounter = document.getElementById('fps-counter');
-const glitchOverlay = document.getElementById('glitch-overlay');
-
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
-window.addEventListener('resize', () => {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-});
-
-// ─── PLAYER STATE ──────────────────────────────────────────────────
-const player = {
-  x: 0, y: 64, z: 0,
-  velX: 0, velY: 0, velZ: 0,
-  yaw: 0, pitch: 0,
-  onGround: false,
-  bhopCount: 0,
-  lastJumpTime: 0,
-  sprintMult: 1,
-};
-
-// ─── CS-STYLE CONSTANTS ────────────────────────────────────────────
-const GRAVITY         = 800;
-const GROUND_LEVEL    = 64;
-const JUMP_FORCE      = 290;
-const MAX_SPEED       = 320;
-const SPRINT_SPEED    = 380;
-const AIR_SPEED       = 60;         // air accel cap per tick
-const AIR_ACCEL       = 10;         // air acceleration multiplier
-const GROUND_ACCEL    = 10;
-const FRICTION        = 6;
-const BHOP_WINDOW     = 80;         // ms window for perfect bhop
-const MAX_BHOP_SPEED  = 1200;       // bhop speed cap
-const STRAFE_GAIN     = 28;         // speed gain per good strafe
-
-// ─── INPUT ─────────────────────────────────────────────────────────
-const keys = {};
-let mouseX = 0, mouseY = 0;
-let locked = false;
-let jumpPressed = false, jumpPressedPrev = false;
-let spaceJustDown = false;
-
-document.addEventListener('keydown', e => {
-  if (!keys[e.code]) {
-    if (e.code === 'Space') spaceJustDown = true;
-  }
-  keys[e.code] = true;
-  // Only prevent default when locked (don't block browser UI before that)
-  if (locked) e.preventDefault();
-});
-document.addEventListener('keyup', e => {
-  keys[e.code] = false;
-  if (e.code === 'Space') spaceJustDown = false;
-});
-
-document.addEventListener('mousemove', e => {
-  if (!locked) return;
-  player.yaw   += e.movementX * 0.0018;
-  player.pitch -= e.movementY * 0.0018;
-  player.pitch  = Math.max(-1.4, Math.min(1.4, player.pitch));
-});
-
-function requestLock() {
-  const req = document.body.requestPointerLock
-    || document.body.mozRequestPointerLock
-    || document.body.webkitRequestPointerLock;
-  if (req) req.call(document.body);
-}
-
-lockScreen.addEventListener('click', requestLock);
-// Also allow clicking the canvas to re-lock if focus is lost
-canvas.addEventListener('click', () => { if (!locked) requestLock(); });
-
-document.addEventListener('pointerlockchange', onLockChange);
-document.addEventListener('mozpointerlockchange', onLockChange);
-document.addEventListener('webkitpointerlockchange', onLockChange);
-
-function onLockChange() {
-  locked = !!(document.pointerLockElement || document.mozPointerLockElement || document.webkitPointerLockElement);
-  if (locked) {
-    lockScreen.style.display = 'none';
-  } else {
-    lockScreen.style.display = 'flex';
-    // Clear all keys so nothing stays "held" after losing lock
-    Object.keys(keys).forEach(k => keys[k] = false);
-    spaceJustDown = false;
-  }
-}
-
-document.addEventListener('pointerlockerror', () => {
-  lockScreen.querySelector('.click-prompt').textContent = '[ CLICK AGAIN TO CONNECT ]';
-});
-document.addEventListener('mozpointerlockerror', () => {
-  lockScreen.querySelector('.click-prompt').textContent = '[ CLICK AGAIN TO CONNECT ]';
-});
-
-// ─── WORLD MAP ─────────────────────────────────────────────────────
-// Boxes: {x, y, z, w, h, d} — y is up
-const boxes = [
-  // Ground slabs — large infinite-ish floor tiles
-  { x: -500, y: 0, z: -500, w: 1000, h: 8, d: 1000 },
-
-  // Platforms
-  { x: 100, y: 8,  z: 0,   w: 80,  h: 12, d: 80  },
-  { x: 200, y: 20, z: 60,  w: 60,  h: 8,  d: 60  },
-  { x: 300, y: 35, z: 10,  w: 50,  h: 8,  d: 50  },
-  { x: 380, y: 50, z: -60, w: 60,  h: 8,  d: 60  },
-  { x: 450, y: 65, z: 30,  w: 50,  h: 8,  d: 50  },
-  { x: -150, y: 10, z: 80, w: 70,  h: 8,  d: 70  },
-  { x: -250, y: 25, z: -50,w: 60,  h: 8,  d: 60  },
-  { x: -350, y: 40, z: 40, w: 55,  h: 8,  d: 55  },
-  { x: 50, y: 8,  z: -150, w: 80,  h: 8,  d: 80  },
-  { x: 150, y: 20, z: -220,w: 70,  h: 8,  d: 70  },
-  { x: -100, y: 8, z: -180,w: 60,  h: 8,  d: 60  },
-
-  // Ramps (tall thin pillars to jump over)
-  { x: 60,  y: 8, z: 40,   w: 15,  h: 40, d: 15  },
-  { x: -60, y: 8, z: -60,  w: 15,  h: 30, d: 15  },
-  { x: 180, y: 8, z: -50,  w: 15,  h: 50, d: 15  },
-
-  // Long corridors for bhop runs
-  { x: -400, y: 0, z: -20, w: 200, h: 8, d: 40   },
-  { x: 200,  y: 0, z: 200, w: 400, h: 8, d: 40   },
-];
-
-// ─── RAYCASTING RENDERER ───────────────────────────────────────────
+'use strict';
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
 const W = () => canvas.width;
 const H = () => canvas.height;
-const FOV = Math.PI / 2.2;
+function resize(){ canvas.width=innerWidth; canvas.height=innerHeight; }
+resize(); addEventListener('resize',resize);
 
-// Sky color bands
-function drawSky() {
-  const grad = ctx.createLinearGradient(0, 0, 0, H() * 0.55);
-  grad.addColorStop(0,   '#000008');
-  grad.addColorStop(0.4, '#000515');
-  grad.addColorStop(1,   '#020028');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, W(), H() * 0.55);
+/* ═══════════════════════════════════════════
+   PARKOUR MAP
+   Each box: {x,y,z,w,h,d,col}
+   y = bottom face. Player spawns at y=0 ground.
+═══════════════════════════════════════════ */
+const FLOOR = 0;
+const map = [
+  // ── Start island
+  {x:-100,y:FLOOR,  z:-100, w:200, h:8, d:200, col:'base'},
+
+  // ── Long bhop runway forward
+  {x:-18, y:FLOOR,  z:100,  w:36,  h:8, d:220, col:'base'},
+
+  // ── Gap 1 – easy
+  {x:-22, y:FLOOR,  z:340,  w:44,  h:8, d:55,  col:'plat'},
+
+  // ── Staircase rising
+  {x:-22, y:FLOOR+18,z:415, w:44,  h:8, d:50,  col:'plat'},
+  {x:-22, y:FLOOR+36,z:485, w:44,  h:8, d:50,  col:'plat'},
+  {x:-22, y:FLOOR+54,z:555, w:44,  h:8, d:50,  col:'plat'},
+
+  // ── Wide mid-air platform
+  {x:-90, y:FLOOR+54,z:625, w:180, h:8, d:100, col:'accent'},
+
+  // ── Side chain (optional detour)
+  {x:110, y:FLOOR+54,z:635, w:50,  h:8, d:50,  col:'plat'},
+  {x:180, y:FLOOR+65,z:660, w:50,  h:8, d:50,  col:'plat'},
+  {x:250, y:FLOOR+76,z:640, w:50,  h:8, d:50,  col:'plat'},
+
+  // ── Drop-down corridor
+  {x:-18, y:FLOOR+20,z:745, w:36,  h:8, d:130, col:'base'},
+
+  // ── Narrow beams (precision jumps)
+  {x:-8,  y:FLOOR+20,z:895, w:16,  h:8, d:55,  col:'plat'},
+  {x:-8,  y:FLOOR+36,z:970, w:16,  h:8, d:55,  col:'plat'},
+  {x:-8,  y:FLOOR+52,z:1045,w:16,  h:8, d:55,  col:'plat'},
+
+  // ── High open platform
+  {x:-100,y:FLOOR+80,z:1120,w:200, h:8, d:120, col:'accent'},
+
+  // ── Final bhop straight
+  {x:-18, y:FLOOR+80,z:1260,w:36,  h:8, d:420, col:'base'},
+
+  // ── GOAL
+  {x:-65, y:FLOOR+80,z:1690,w:130, h:8, d:130, col:'goal'},
+];
+
+const COLORS = {
+  base:  {fill:'rgba(0,6,24,',   edge:'rgba(0,210,255,'},
+  plat:  {fill:'rgba(0,3,18,',   edge:'rgba(0,170,255,'},
+  accent:{fill:'rgba(6,0,26,',   edge:'rgba(130,0,255,'},
+  goal:  {fill:'rgba(0,16,6,',   edge:'rgba(0,255,110,'},
+};
+
+/* ═══════════════════════════════════════════
+   PLAYER
+═══════════════════════════════════════════ */
+const P = {x:0,y:64,z:0, vx:0,vy:0,vz:0, yaw:0,pitch:0, onGround:false, bhop:0, lastLandT:0};
+const EYE    = 56;   // eye above feet
+const PRAD   = 14;
+const GRAV   = 800;
+const JVEL   = 310;
+const GACCEL = 14;
+const AACCEL = 16;   // air accel — deliberately strong so strafing feels good
+const GSPEED = 280;
+const SSPEED = 360;
+const AWSPEED= 420;  // air wish speed — high so strafing adds real velocity
+const FRIC   = 5.5;
+const BHOP_W = 130;  // ms bhop window
+
+/* ═══════════════════════════════════════════
+   INPUT
+═══════════════════════════════════════════ */
+const K = {};
+let locked = false;
+let jumpQ  = false;
+
+document.addEventListener('keydown', e=>{
+  if (!K[e.code] && e.code==='Space') jumpQ=true;
+  K[e.code]=true;
+  if (locked) e.preventDefault();
+});
+document.addEventListener('keyup', e=>{ K[e.code]=false; });
+document.addEventListener('wheel', e=>{
+  if (!locked) return;
+  if (e.deltaY<0) jumpQ=true;
+  e.preventDefault();
+},{passive:false});
+document.addEventListener('mousemove', e=>{
+  if (!locked) return;
+  P.yaw   += e.movementX * 0.002;
+  P.pitch -= e.movementY * 0.002;
+  P.pitch  = Math.max(-1.35, Math.min(1.35, P.pitch));
+});
+
+const ls  = document.getElementById('lockscreen');
+const btn = document.getElementById('btntext');
+function doLock(){ document.body.requestPointerLock(); }
+ls.addEventListener('click', doLock);
+canvas.addEventListener('click', ()=>{ if(!locked) doLock(); });
+document.addEventListener('pointerlockchange', ()=>{
+  locked = !!document.pointerLockElement;
+  ls.style.display = locked ? 'none' : 'flex';
+  if (!locked){ Object.keys(K).forEach(k=>K[k]=false); jumpQ=false; }
+});
+document.addEventListener('pointerlockerror', ()=>{ btn.textContent='[ CLICK AGAIN ]'; });
+
+/* ═══════════════════════════════════════════
+   PHYSICS
+═══════════════════════════════════════════ */
+function doFriction(dt){
+  const s=Math.hypot(P.vx,P.vz); if(s<1){P.vx=0;P.vz=0;return;}
+  const r=Math.max(0,s-s*FRIC*dt)/s;
+  P.vx*=r; P.vz*=r;
 }
 
-function drawFloor() {
-  const grad = ctx.createLinearGradient(0, H() * 0.55, 0, H());
-  grad.addColorStop(0,   '#010010');
-  grad.addColorStop(1,   '#000005');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, H() * 0.55, W(), H() * 0.45);
+// Quake-style accelerate
+function accel(wdx,wdz,wsp,acc,dt){
+  const proj = P.vx*wdx + P.vz*wdz;
+  const add  = wsp - proj;
+  if (add<=0) return;
+  let g = acc*wsp*dt; if(g>add) g=add;
+  P.vx+=g*wdx; P.vz+=g*wdz;
 }
 
-// Grid perspective floor
-function drawGrid() {
+function getStandY(px,py,pz){
+  let best=null;
+  const feet = py - EYE;
+  for (const b of map){
+    if (px+PRAD<=b.x || px-PRAD>=b.x+b.w) continue;
+    if (pz+PRAD<=b.z || pz-PRAD>=b.z+b.d) continue;
+    const top=b.y+b.h;
+    if (feet>=top-10 && feet<=top+32 && P.vy<=0)
+      if (best===null || top>best) best=top;
+  }
+  return best;
+}
+
+let lastSDir=0;
+
+function physics(dt){
+  const cos=Math.cos(P.yaw), sin=Math.sin(P.yaw);
+  let fw=0,sd=0;
+  if(K['KeyW']) fw+=1; if(K['KeyS']) fw-=1;
+  if(K['KeyA']) sd-=1; if(K['KeyD']) sd+=1;
+  const sprint = K['ShiftLeft']||K['ShiftRight'];
+
+  let wdx=fw*cos+sd*sin, wdz=fw*-sin+sd*cos;
+  const wdl=Math.hypot(wdx,wdz);
+  if(wdl>0){wdx/=wdl; wdz/=wdl;}
+
+  if(P.onGround){
+    doFriction(dt);
+    if(wdl>0) accel(wdx,wdz, sprint?SSPEED:GSPEED, GACCEL, dt);
+    lastSDir=0;
+  } else {
+    // Air strafing — always on, strong
+    if(wdl>0){
+      accel(wdx,wdz, AWSPEED, AACCEL, dt);
+      lastSDir = sd<0 ? -1 : sd>0 ? 1 : 0;
+    } else lastSDir=0;
+  }
+
+  P.vy -= GRAV*dt;
+
+  if(jumpQ && P.onGround){
+    P.vy=JVEL; P.onGround=false;
+    const now=performance.now();
+    if(now-P.lastLandT < BHOP_W){
+      P.bhop++;
+      showGain('+BHOP ×'+P.bhop,'#aa44ff');
+    } else P.bhop=0;
+  }
+  jumpQ=false;
+
+  // Ground friction caps speed
+  if(P.onGround){
+    const cap=(sprint?SSPEED:GSPEED)*1.08;
+    const hs=Math.hypot(P.vx,P.vz);
+    if(hs>cap){P.vx=P.vx/hs*cap; P.vz=P.vz/hs*cap;}
+  }
+  const hs=Math.hypot(P.vx,P.vz);
+  if(hs>1800){P.vx=P.vx/hs*1800; P.vz=P.vz/hs*1800;}
+
+  P.x+=P.vx*dt; P.y+=P.vy*dt; P.z+=P.vz*dt;
+
+  const sy=getStandY(P.x,P.y,P.z);
+  if(sy!==null){
+    const ey=sy+EYE;
+    if(!P.onGround) P.lastLandT=performance.now();
+    P.y=ey; P.vy=0; P.onGround=true;
+  } else P.onGround=false;
+
+  // Respawn on fall
+  if(P.y<-400){ P.x=0;P.y=64;P.z=0;P.vx=0;P.vy=0;P.vz=0;P.bhop=0; showGain('RESPAWN','#ff003c'); }
+}
+
+/* ═══════════════════════════════════════════
+   RENDERER
+═══════════════════════════════════════════ */
+const FOV=Math.PI/2.1;
+function project(wx,wy,wz){
+  const dx=wx-P.x, dy=wy-P.y, dz=wz-P.z;
+  const cy=Math.cos(-P.yaw), sy=Math.sin(-P.yaw);
+  const rx=dx*cy-dz*sy, rz=dx*sy+dz*cy;
+  const cp=Math.cos(-P.pitch), sp=Math.sin(-P.pitch);
+  const ry=dy*cp-rz*sp, rz2=dy*sp+rz*cp;
+  if(rz2<0.5) return null;
+  const sc=(W()*.5)/Math.tan(FOV*.5);
+  return {sx:W()*.5+rx/rz2*sc, sy:H()*.5-ry/rz2*sc, dist:rz2};
+}
+
+function drawSky(){
+  const horizon=H()*.5-P.pitch*H()*.32;
+  const sg=ctx.createLinearGradient(0,0,0,horizon);
+  sg.addColorStop(0,'#00000c'); sg.addColorStop(1,'#00011c');
+  ctx.fillStyle=sg; ctx.fillRect(0,0,W(),horizon);
+  const fg=ctx.createLinearGradient(0,horizon,0,H());
+  fg.addColorStop(0,'#000116'); fg.addColorStop(1,'#000007');
+  ctx.fillStyle=fg; ctx.fillRect(0,horizon,W(),H()-horizon);
+}
+
+function drawGrid(){
+  const horizon=H()*.5-P.pitch*H()*.32;
   ctx.save();
-  ctx.strokeStyle = 'rgba(0,240,255,0.07)';
-  ctx.lineWidth = 1;
-
-  const horizon = H() * 0.5 - player.pitch * H() * 0.3;
-  const vpX = W() / 2;
-
-  // Perspective lines going to vanishing point
-  for (let i = -12; i <= 12; i++) {
-    const worldX = i * 50;
-    // Project world point (worldX, 0, far) to screen
-    const dx = worldX - player.x;
-    const dz = 600;
-    const cos = Math.cos(-player.yaw);
-    const sin = Math.sin(-player.yaw);
-    const rx = dx * cos - dz * sin;
-    const rz = dx * sin + dz * cos;
-    if (rz <= 0) continue;
-
-    const screenX = vpX + (rx / rz) * (W() / (2 * Math.tan(FOV / 2)));
-    ctx.beginPath();
-    ctx.moveTo(vpX, horizon);
-    ctx.lineTo(screenX, H());
-    ctx.stroke();
+  for(let i=-20;i<=20;i++){
+    const wx=i*50, dx=wx-P.x, dz=800;
+    const cy=Math.cos(-P.yaw),sy=Math.sin(-P.yaw);
+    const rx=dx*cy-dz*sy, rz=dx*sy+dz*cy;
+    if(rz<=0) continue;
+    const sc=(W()*.5)/Math.tan(FOV*.5);
+    const sx=W()*.5+rx/rz*sc;
+    const a=Math.max(0,.075-Math.abs(i)*.003);
+    ctx.strokeStyle=`rgba(0,210,255,${a})`; ctx.lineWidth=.8;
+    ctx.beginPath(); ctx.moveTo(W()*.5,horizon); ctx.lineTo(sx,H()); ctx.stroke();
   }
-
-  // Horizontal lines
-  for (let d = 20; d <= 600; d += 40) {
-    const rz = d;
-    const projY = horizon + ((player.y - GROUND_LEVEL + 8) / rz) * (W() / (2 * Math.tan(FOV / 2)));
-    const screenY = H() * 0.5 + (H() * 0.5 - horizon) * (d / 600) + horizon * (1 - d/600);
-    // simple depth-based y
-    const sy = horizon + (H() - horizon) * (d / 600);
-    const alpha = 0.06 * (1 - d / 700);
-    ctx.strokeStyle = `rgba(0,240,255,${alpha})`;
-    ctx.beginPath();
-    ctx.moveTo(0, sy);
-    ctx.lineTo(W(), sy);
-    ctx.stroke();
+  for(let d=30;d<=700;d+=45){
+    const sy=horizon+(H()-horizon)*(d/700);
+    const a=.065*(1-d/760);
+    ctx.strokeStyle=`rgba(0,210,255,${a})`; ctx.lineWidth=.7;
+    ctx.beginPath(); ctx.moveTo(0,sy); ctx.lineTo(W(),sy); ctx.stroke();
   }
-
   ctx.restore();
 }
 
-// Project 3D world point to 2D screen
-function project(wx, wy, wz) {
-  const dx = wx - player.x;
-  const dy = wy - player.y;
-  const dz = wz - player.z;
+function drawBox(b){
+  const {x,y,z,w,h,d,col}=b;
+  const C=COLORS[col]||COLORS.base;
+  const vs=[
+    [x,y,z],[x+w,y,z],[x+w,y,z+d],[x,y,z+d],
+    [x,y+h,z],[x+w,y+h,z],[x+w,y+h,z+d],[x,y+h,z+d],
+  ].map(([a,b,c])=>project(a,b,c));
 
-  const cosY = Math.cos(-player.yaw);
-  const sinY = Math.sin(-player.yaw);
-  const rx = dx * cosY - dz * sinY;
-  const rz = dx * sinY + dz * cosY;
-
-  const cosPitch = Math.cos(-player.pitch);
-  const sinPitch = Math.sin(-player.pitch);
-  const ry2 = dy * cosPitch - rz * sinPitch;
-  const rz2 = dy * sinPitch + rz * cosPitch;
-
-  if (rz2 <= 0.1) return null;
-
-  const fovScale = (W() * 0.5) / Math.tan(FOV / 2);
-  const sx = W() * 0.5 + (rx / rz2) * fovScale;
-  const sy = H() * 0.5 - (ry2 / rz2) * fovScale;
-  return { x: sx, y: sy, z: rz2 };
-}
-
-function drawBox(box) {
-  const { x, y, z, w, h, d } = box;
-  // Box faces: we'll draw the visible faces
-  const corners = [
-    [x,   y,   z],
-    [x+w, y,   z],
-    [x+w, y,   z+d],
-    [x,   y,   z+d],
-    [x,   y+h, z],
-    [x+w, y+h, z],
-    [x+w, y+h, z+d],
-    [x,   y+h, z+d],
+  const faces=[
+    {vi:[4,5,6,7],t:'top'},
+    {vi:[0,1,5,4],t:'front'},
+    {vi:[1,2,6,5],t:'right'},
+    {vi:[3,2,6,7],t:'back'},
+    {vi:[0,3,7,4],t:'left'},
   ];
-
-  const proj = corners.map(([cx,cy,cz]) => project(cx, cy, cz));
-
-  // Faces: [indices, normal indicator]
-  const faces = [
-    { verts: [4,5,6,7], type: 'top' },
-    { verts: [0,1,5,4], type: 'front' },
-    { verts: [1,2,6,5], type: 'right' },
-    { verts: [2,3,7,6], type: 'back' },
-    { verts: [3,0,4,7], type: 'left' },
-  ];
-
-  for (const face of faces) {
-    const pts = face.verts.map(i => proj[i]);
-    if (pts.some(p => !p)) continue;
-
-    // Backface check — if all pts behind camera, skip
-    const avgZ = pts.reduce((s,p) => s + p.z, 0) / pts.length;
-    if (avgZ <= 0) continue;
-
-    // Compute screen area for backface culling
-    const p0 = pts[0], p1 = pts[1], p2 = pts[2];
-    const cross = (p1.x - p0.x) * (p2.y - p0.y) - (p1.y - p0.y) * (p2.x - p0.x);
-    if (face.type !== 'top' && cross > 0) continue;
-    if (face.type === 'top' && cross < 0) continue;
-
-    const dist = avgZ;
-    const fog = Math.max(0, 1 - dist / 450);
-
+  for(const f of faces){
+    const pts=f.vi.map(i=>vs[i]);
+    if(pts.some(p=>!p)) continue;
+    const avgD=pts.reduce((s,p)=>s+p.dist,0)/pts.length;
+    if(avgD>580) continue;
+    const fog=Math.max(0,1-avgD/500);
+    // backface cull
+    const p0=pts[0],p1=pts[1],p2=pts[2];
+    const cross=(p1.sx-p0.sx)*(p2.sy-p0.sy)-(p1.sy-p0.sy)*(p2.sx-p0.sx);
+    if(f.t==='top' && cross<0) continue;
+    if(f.t!=='top' && cross>0) continue;
+    const br=f.t==='top'?.9:f.t==='right'||f.t==='left'?.52:.38;
     ctx.save();
     ctx.beginPath();
-    ctx.moveTo(pts[0].x, pts[0].y);
-    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.moveTo(pts[0].sx,pts[0].sy);
+    for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].sx,pts[i].sy);
     ctx.closePath();
-
-    let faceColor;
-    if (face.type === 'top') {
-      faceColor = `rgba(0,10,30,${0.9 * fog})`;
-    } else if (face.type === 'front' || face.type === 'back') {
-      faceColor = `rgba(0,5,20,${0.85 * fog})`;
-    } else {
-      faceColor = `rgba(0,3,15,${0.8 * fog})`;
-    }
-
-    ctx.fillStyle = faceColor;
+    ctx.fillStyle=C.fill+(br*fog*.95)+')';
     ctx.fill();
-
-    // Edge glow
-    const edgeAlpha = fog * 0.6;
-    ctx.strokeStyle = `rgba(0,240,255,${edgeAlpha * 0.4})`;
-    ctx.lineWidth = 0.7;
-    ctx.stroke();
-
-    // Top face gets grid lines
-    if (face.type === 'top' && fog > 0.2) {
-      ctx.strokeStyle = `rgba(0,240,255,${edgeAlpha * 0.15})`;
-      ctx.lineWidth = 0.4;
-      // just stroke again with thinner line for inner grid suggestion
-      ctx.stroke();
-    }
-
-    ctx.restore();
-  }
-}
-
-// Draw world objects / floating orbs (collectibles feel)
-const orbs = [];
-for (let i = 0; i < 25; i++) {
-  orbs.push({
-    x: (Math.random() - 0.5) * 800,
-    y: 80 + Math.random() * 150,
-    z: (Math.random() - 0.5) * 800,
-    phase: Math.random() * Math.PI * 2,
-  });
-}
-
-function drawOrbs(t) {
-  for (const orb of orbs) {
-    const floatY = orb.y + Math.sin(t * 1.2 + orb.phase) * 8;
-    const p = project(orb.x, floatY, orb.z);
-    if (!p || p.z < 1 || p.z > 400) continue;
-
-    const size = Math.max(1, 5 * (80 / p.z));
-    const fog = Math.max(0, 1 - p.z / 400);
-    const alpha = fog * 0.8;
-
-    ctx.save();
-    const grd = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, size * 2);
-    grd.addColorStop(0, `rgba(0,240,255,${alpha})`);
-    grd.addColorStop(0.5, `rgba(122,0,255,${alpha * 0.5})`);
-    grd.addColorStop(1, 'transparent');
-    ctx.fillStyle = grd;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, size * 2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
-}
-
-// Distant "wired" structures — vertical pillars
-const pillars = [];
-for (let i = 0; i < 40; i++) {
-  pillars.push({
-    x: (Math.random() - 0.5) * 1500,
-    z: (Math.random() - 0.5) * 1500,
-    h: 50 + Math.random() * 200,
-    w: 3 + Math.random() * 6,
-  });
-}
-
-function drawPillars() {
-  for (const p of pillars) {
-    const bot = project(p.x, GROUND_LEVEL, p.z);
-    const top = project(p.x, GROUND_LEVEL + p.h, p.z);
-    if (!bot || !top || bot.z > 800) continue;
-    const fog = Math.max(0, 1 - bot.z / 800) * 0.4;
-    const screenW = Math.max(0.5, p.w * (60 / bot.z));
-
-    ctx.save();
-    ctx.strokeStyle = `rgba(0,240,255,${fog})`;
-    ctx.lineWidth = screenW;
-    ctx.beginPath();
-    ctx.moveTo(bot.x, bot.y);
-    ctx.lineTo(top.x, top.y);
+    ctx.strokeStyle=C.edge+(Math.min(.9,fog*1.1)*.68)+')';
+    ctx.lineWidth=f.t==='top'?1:.55;
     ctx.stroke();
     ctx.restore();
   }
 }
 
-// ─── PHYSICS ───────────────────────────────────────────────────────
-function getGroundHeight(px, pz) {
-  let maxY = 0;
-  for (const box of boxes) {
-    if (px >= box.x - 16 && px <= box.x + box.w + 16 &&
-        pz >= box.z - 16 && pz <= box.z + box.d + 16) {
-      if (box.y + box.h > maxY) maxY = box.y + box.h;
-    }
+// Pillars
+const pillars=Array.from({length:55},()=>({
+  x:(Math.random()-.5)*1800, z:(Math.random()-.5)*1800+800,
+  h:60+Math.random()*220, w:2+Math.random()*5,
+}));
+function drawPillars(){
+  for(const p of pillars){
+    const bot=project(p.x,FLOOR,p.z), top=project(p.x,FLOOR+p.h,p.z);
+    if(!bot||!top||bot.dist>900) continue;
+    const fog=Math.max(0,1-bot.dist/900)*.38;
+    ctx.save();
+    ctx.strokeStyle=`rgba(0,220,255,${fog})`;
+    ctx.lineWidth=Math.max(.4,p.w*50/bot.dist);
+    ctx.beginPath(); ctx.moveTo(bot.sx,bot.sy); ctx.lineTo(top.sx,top.sy); ctx.stroke();
+    ctx.restore();
   }
-  return maxY;
 }
 
-function checkBoxCollision(px, py, pz) {
-  // Check all boxes, return highest surface player stands on
-  const RADIUS = 16;
-  const HEIGHT = 72;
-  let standY = null;
-
-  for (const box of boxes) {
-    const inX = px + RADIUS > box.x && px - RADIUS < box.x + box.w;
-    const inZ = pz + RADIUS > box.z && pz - RADIUS < box.z + box.d;
-    const inY = py < box.y + box.h + 2 && py + HEIGHT > box.y;
-
-    if (inX && inZ && inY) {
-      // Landing on top
-      if (player.velY <= 0 && py >= box.y + box.h - 4) {
-        if (standY === null || box.y + box.h > standY) {
-          standY = box.y + box.h;
-        }
-      }
-    }
+// Orbs
+const orbs=Array.from({length:35},()=>({
+  x:(Math.random()-.5)*600, z:100+Math.random()*1700,
+  y:80+Math.random()*180, ph:Math.random()*Math.PI*2,
+}));
+function drawOrbs(t){
+  for(const o of orbs){
+    const fy=o.y+Math.sin(t+o.ph)*10;
+    const p=project(o.x,fy,o.z);
+    if(!p||p.dist>460) continue;
+    const fog=Math.max(0,1-p.dist/460);
+    const r=Math.max(1,5*(60/p.dist));
+    ctx.save();
+    const g=ctx.createRadialGradient(p.sx,p.sy,0,p.sx,p.sy,r*2.5);
+    g.addColorStop(0,`rgba(0,240,255,${fog*.85})`);
+    g.addColorStop(.5,`rgba(100,0,255,${fog*.35})`);
+    g.addColorStop(1,'transparent');
+    ctx.fillStyle=g;
+    ctx.beginPath(); ctx.arc(p.sx,p.sy,r*2.5,0,Math.PI*2); ctx.fill();
+    ctx.restore();
   }
-  return standY;
 }
 
-// CS-style movement physics
-function applyFriction(dt) {
-  if (!player.onGround) return;
-  const speed = Math.sqrt(player.velX**2 + player.velZ**2);
-  if (speed < 1) { player.velX = 0; player.velZ = 0; return; }
-  const drop = speed * FRICTION * dt;
-  const newSpeed = Math.max(0, speed - drop);
-  player.velX *= newSpeed / speed;
-  player.velZ *= newSpeed / speed;
+// Goal glow beacon
+function drawGoal(t){
+  const b=map[map.length-1];
+  const cx=b.x+b.w/2, cy=b.y+b.h+25, cz=b.z+b.d/2;
+  const p=project(cx, cy+Math.sin(t*.9)*12, cz);
+  if(!p||p.dist>700) return;
+  const fog=Math.max(0,1-p.dist/600);
+  const r=Math.max(2,90*(90/p.dist));
+  ctx.save();
+  const g=ctx.createRadialGradient(p.sx,p.sy,0,p.sx,p.sy,r);
+  g.addColorStop(0,`rgba(0,255,120,${fog*.3})`);
+  g.addColorStop(1,'transparent');
+  ctx.fillStyle=g; ctx.beginPath(); ctx.arc(p.sx,p.sy,r,0,Math.PI*2); ctx.fill();
+  ctx.restore();
 }
 
-function accelerate(wishDirX, wishDirZ, wishSpeed, accel, dt) {
-  const currentSpeed = player.velX * wishDirX + player.velZ * wishDirZ;
-  const addSpeed = wishSpeed - currentSpeed;
-  if (addSpeed <= 0) return;
-  let accelSpeed = accel * wishSpeed * dt;
-  if (accelSpeed > addSpeed) accelSpeed = addSpeed;
-  player.velX += accelSpeed * wishDirX;
-  player.velZ += accelSpeed * wishDirZ;
+/* ═══════════════════════════════════════════
+   HUD
+═══════════════════════════════════════════ */
+const elSpdNum=document.getElementById('spdnum');
+const elSpdBar=document.getElementById('spdbar');
+const elCombo=document.getElementById('combon');
+const elBhop=document.getElementById('bhopsmall');
+const elFps=document.getElementById('fps');
+const elGnd=document.getElementById('gndtxt');
+const elSpd2=document.getElementById('spd2');
+const elSl=document.getElementById('sl'),elSc=document.getElementById('sc'),elSr=document.getElementById('sr');
+const hudEl=document.getElementById('hud');
+const glitchEl=document.getElementById('glitch');
+
+function showGain(txt,col){
+  const el=document.createElement('div');
+  el.className='gain'; el.textContent=txt;
+  el.style.color=col; el.style.textShadow=`0 0 10px ${col}`;
+  el.style.left=(W()/2+(Math.random()-.5)*100)+'px';
+  el.style.top=(H()*.37+Math.random()*40)+'px';
+  hudEl.appendChild(el); setTimeout(()=>el.remove(),900);
 }
 
-let lastStrafeDir = 0;
-let strafeGainAnim = 0;
+let fpsFr=0,fpsT=0,fpsV=0,glitchCd=0;
 
-function updatePhysics(dt) {
-  const cos = Math.cos(player.yaw);
-  const sin = Math.sin(player.yaw);
+function updateHUD(dt,hs){
+  const v=Math.round(hs);
+  elSpdNum.textContent=String(v).padStart(3,'0');
+  elSpd2.textContent=v;
+  elBhop.textContent=P.bhop;
+  elCombo.textContent=P.bhop;
 
-  let fwd = 0, side = 0;
-  if (keys['KeyW']) fwd += 1;
-  if (keys['KeyS']) fwd -= 1;
-  if (keys['KeyA']) side -= 1;
-  if (keys['KeyD']) side += 1;
-
-  const sprint = keys['ShiftLeft'] || keys['ShiftRight'];
-  const maxSpd = sprint ? SPRINT_SPEED : MAX_SPEED;
-
-  // Wish direction in world space
-  let wdx = fwd * cos + side * sin;
-  let wdz = fwd * -sin + side * cos;
-  const wdLen = Math.sqrt(wdx**2 + wdz**2);
-  if (wdLen > 0) { wdx /= wdLen; wdz /= wdLen; }
-
-  if (player.onGround) {
-    applyFriction(dt);
-    if (wdLen > 0) accelerate(wdx, wdz, maxSpd, GROUND_ACCEL, dt);
+  const pct=Math.min(100,hs/1400*100);
+  elSpdBar.style.width=pct+'%';
+  if(hs<340){
+    elSpdBar.style.background='#00f0ff'; elSpdBar.style.boxShadow='0 0 6px #00f0ff';
+    elSpdNum.style.color='#00f0ff'; elSpdNum.style.textShadow='0 0 14px #00f0ff';
+  } else if(hs<700){
+    elSpdBar.style.background='#7a00ff'; elSpdBar.style.boxShadow='0 0 8px #7a00ff';
+    elSpdNum.style.color='#aa44ff'; elSpdNum.style.textShadow='0 0 18px #7a00ff';
   } else {
-    // AIR STRAFE — CS-style air acceleration
-    if (wdLen > 0) {
-      const currentVel = Math.sqrt(player.velX**2 + player.velZ**2);
-      const wishSpd = Math.min(AIR_SPEED, maxSpd);
-      accelerate(wdx, wdz, wishSpd, AIR_ACCEL, dt);
+    elSpdBar.style.background='#ff003c'; elSpdBar.style.boxShadow='0 0 12px #ff003c';
+    elSpdNum.style.color='#ff4466'; elSpdNum.style.textShadow='0 0 22px #ff003c';
+  }
 
-      // Track strafe direction for indicator
-      if (side < 0) lastStrafeDir = -1;
-      else if (side > 0) lastStrafeDir = 1;
-      else lastStrafeDir = 0;
+  elGnd.textContent=P.onGround?'GROUNDED':'AIRBORNE';
+  elGnd.style.color=P.onGround?'rgba(0,240,255,.6)':'rgba(255,190,0,.85)';
 
-      // Strafe gain visual
-      const newVel = Math.sqrt(player.velX**2 + player.velZ**2);
-      if (newVel > currentVel + 1 && currentVel > 200) {
-        strafeGainAnim = 1;
-      }
-    } else {
-      lastStrafeDir = 0;
+  [elSl,elSc,elSr].forEach(e=>e.classList.remove('on'));
+  if(!P.onGround){
+    if(lastSDir<0) elSl.classList.add('on');
+    else if(lastSDir>0) elSr.classList.add('on');
+    else elSc.classList.add('on');
+  }
+
+  fpsFr++; fpsT+=dt;
+  if(fpsT>=.5){fpsV=Math.round(fpsFr/fpsT); fpsFr=0; fpsT=0;}
+  elFps.textContent=fpsV+' FPS';
+
+  // glitch at high speed
+  glitchCd-=dt;
+  if(glitchCd<=0&&hs>480){
+    glitchCd=1.5+Math.random()*3;
+    let html='';
+    for(let i=0;i<(3+Math.random()*4|0);i++){
+      const top=Math.random()*100,h=1+Math.random()*6,off=(Math.random()-.5)*22;
+      const col=Math.random()>.5?'#00f0ff':'#7a00ff';
+      html+=`<div style="position:absolute;top:${top}%;left:0;right:0;height:${h}px;background:${col};opacity:.04;transform:translateX(${off}px)"></div>`;
     }
-  }
-
-  // Gravity
-  player.velY -= GRAVITY * dt;
-
-  // Jump
-  if (spaceJustDown && player.onGround) {
-    player.velY = JUMP_FORCE;
-    player.onGround = false;
-
-    const now = performance.now();
-    const timeSinceLast = now - player.lastJumpTime;
-    if (timeSinceLast < BHOP_WINDOW + 200 && timeSinceLast > 10) {
-      player.bhopCount++;
-      bhopNum.textContent = player.bhopCount;
-      spawnGainText();
-    } else {
-      player.bhopCount = 0;
-      bhopNum.textContent = '0';
-    }
-    player.lastJumpTime = now;
-  }
-  spaceJustDown = false;
-
-  // Speed cap (bhop lets you exceed slightly)
-  const maxBhopSpd = MAX_BHOP_SPEED;
-  const horizSpeed = Math.sqrt(player.velX**2 + player.velZ**2);
-  if (horizSpeed > maxBhopSpd) {
-    player.velX = (player.velX / horizSpeed) * maxBhopSpd;
-    player.velZ = (player.velZ / horizSpeed) * maxBhopSpd;
-  }
-
-  // Move
-  player.x += player.velX * dt;
-  player.y += player.velY * dt;
-  player.z += player.velZ * dt;
-
-  // Ground detection
-  const standY = checkBoxCollision(player.x, player.y, player.z);
-  if (standY !== null && player.velY <= 0) {
-    player.y = standY;
-    player.velY = 0;
-    player.onGround = true;
-  } else {
-    player.onGround = false;
-  }
-
-  // Absolute floor
-  if (player.y <= GROUND_LEVEL) {
-    if (player.y < GROUND_LEVEL && player.velY < 0) {
-      player.y = GROUND_LEVEL;
-      player.velY = 0;
-      player.onGround = true;
-    }
+    glitchEl.innerHTML=html; glitchEl.style.opacity='1';
+    setTimeout(()=>{glitchEl.style.opacity='0';glitchEl.innerHTML='';},70);
   }
 }
 
-// ─── GAIN TEXT ─────────────────────────────────────────────────────
-function spawnGainText() {
-  const el = document.createElement('div');
-  el.className = 'strafe-gain';
-  el.textContent = '+BHOP';
-  el.style.left = (W()/2 + (Math.random()-0.5)*80) + 'px';
-  el.style.top  = (H()*0.4 + Math.random()*40) + 'px';
-  document.getElementById('hud').appendChild(el);
-  setTimeout(() => el.remove(), 800);
+// Speed gain popup when air strafing works
+let prevHs=0, gainCd=0;
+function checkGain(hs){
+  gainCd-=.016;
+  if(!P.onGround&&gainCd<=0&&hs>prevHs+18&&hs>250){
+    gainCd=.5; showGain('+'+Math.round(hs-prevHs)+' SPD','#00f0ff');
+  }
+  prevHs=hs;
 }
 
-// ─── STRAFE INDICATOR UPDATE ────────────────────────────────────────
-const sdLeft   = document.getElementById('sd-left');
-const sdCenter = document.getElementById('sd-center');
-const sdRight  = document.getElementById('sd-right');
+/* ═══════════════════════════════════════════
+   LOOP
+═══════════════════════════════════════════ */
+let prev=performance.now();
+function loop(now){
+  const dt=Math.min((now-prev)/1000,.05); prev=now;
+  if(locked) physics(dt);
+  const hs=Math.hypot(P.vx,P.vz);
 
-function updateStrafeIndicator() {
-  sdLeft.classList.remove('active');
-  sdCenter.classList.remove('active');
-  sdRight.classList.remove('active');
-  if (!player.onGround) {
-    if (lastStrafeDir < 0) sdLeft.classList.add('active');
-    else if (lastStrafeDir > 0) sdRight.classList.add('active');
-    else sdCenter.classList.add('active');
-  }
+  ctx.clearRect(0,0,W(),H());
+  drawSky(); drawGrid(); drawPillars();
+
+  [...map].sort((a,b)=>{
+    const da=(a.x+a.w/2-P.x)**2+(a.z+a.d/2-P.z)**2;
+    const db=(b.x+b.w/2-P.x)**2+(b.z+b.d/2-P.z)**2;
+    return db-da;
+  }).forEach(drawBox);
+
+  drawOrbs(now/1000); drawGoal(now/1000);
+
+  if(locked){ updateHUD(dt,hs); checkGain(hs); }
+  requestAnimationFrame(loop);
 }
-
-// ─── GLITCH EFFECT ─────────────────────────────────────────────────
-let glitchTimer = 0;
-function maybeGlitch(t, speed) {
-  glitchTimer -= 0.016;
-  if (glitchTimer <= 0 && speed > 400) {
-    glitchTimer = 2 + Math.random() * 4;
-    const rows = 3 + Math.floor(Math.random() * 5);
-    let html = '';
-    for (let i = 0; i < rows; i++) {
-      const top = Math.random() * 100;
-      const h   = 2 + Math.random() * 8;
-      const off = (Math.random() - 0.5) * 20;
-      const col = Math.random() > 0.5 ? '#00f0ff' : '#7a00ff';
-      html += `<div style="position:absolute;top:${top}%;left:0;right:0;height:${h}px;background:${col};opacity:0.05;transform:translateX(${off}px)"></div>`;
-    }
-    glitchOverlay.innerHTML = html;
-    glitchOverlay.style.opacity = '1';
-    setTimeout(() => { glitchOverlay.style.opacity = '0'; glitchOverlay.innerHTML = ''; }, 80);
-  }
-}
-
-// ─── HUD UPDATE ────────────────────────────────────────────────────
-let lastTime = performance.now();
-let fps = 0;
-let fpsSmooth = 60;
-let frameCount = 0;
-let fpsTimer = 0;
-
-function updateHUD(dt, speed) {
-  speedVal.textContent = Math.round(speed).toString().padStart(3, '0');
-  const pct = Math.min(100, (speed / MAX_BHOP_SPEED) * 100);
-  speedBar.style.width = pct + '%';
-
-  // Color speed bar based on speed tier
-  if (speed < MAX_SPEED * 1.2) {
-    speedBar.style.background = '#00f0ff';
-    speedBar.style.boxShadow  = '0 0 8px #00f0ff';
-  } else if (speed < MAX_BHOP_SPEED * 0.6) {
-    speedBar.style.background = '#7a00ff';
-    speedBar.style.boxShadow  = '0 0 8px #7a00ff';
-  } else {
-    speedBar.style.background = '#ff003c';
-    speedBar.style.boxShadow  = '0 0 12px #ff003c';
-  }
-
-  fpsTimer += dt;
-  frameCount++;
-  if (fpsTimer >= 0.5) {
-    fpsSmooth = frameCount / fpsTimer;
-    frameCount = 0;
-    fpsTimer = 0;
-    fpsCounter.textContent = Math.round(fpsSmooth).toString().padStart(2,'0') + ' FPS';
-  }
-}
-
-// ─── MAIN LOOP ─────────────────────────────────────────────────────
-function render(t) {
-  const now = performance.now();
-  const dt  = Math.min((now - lastTime) / 1000, 0.05);
-  lastTime  = now;
-
-  if (locked) updatePhysics(dt);
-
-  // Horizontal speed for HUD
-  const horizSpeed = Math.sqrt(player.velX**2 + player.velZ**2);
-
-  // Draw
-  ctx.clearRect(0, 0, W(), H());
-  drawSky();
-  drawFloor();
-  drawGrid();
-  drawPillars();
-
-  // Sort boxes by distance
-  const sorted = [...boxes].sort((a, b) => {
-    const da = (a.x + a.w/2 - player.x)**2 + (a.z + a.d/2 - player.z)**2;
-    const db = (b.x + b.w/2 - player.x)**2 + (b.z + b.d/2 - player.z)**2;
-    return db - da;
-  });
-  sorted.forEach(drawBox);
-
-  drawOrbs(now / 1000);
-
-  // Head bob
-  if (player.onGround && horizSpeed > 50) {
-    const bob = Math.sin(now * 0.008) * 0.008 * Math.min(horizSpeed / MAX_SPEED, 1);
-    player.pitch += bob * 0.01;
-  }
-
-  updateHUD(dt, horizSpeed);
-  updateStrafeIndicator();
-  maybeGlitch(now / 1000, horizSpeed);
-
-  requestAnimationFrame(render);
-}
-
-requestAnimationFrame(render);
+requestAnimationFrame(loop);
 </script>
 </body>
 </html>
