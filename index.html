@@ -165,11 +165,12 @@ const map = [
   {x:-65, y:FLOOR+80,z:1690,w:130, h:8, d:130, col:'goal'},
 ];
 
+// top face color, side face color, edge glow [r,g,b]
 const COLORS = {
-  base:  {fill:'rgba(0,6,24,',   edge:'rgba(0,210,255,'},
-  plat:  {fill:'rgba(0,3,18,',   edge:'rgba(0,170,255,'},
-  accent:{fill:'rgba(6,0,26,',   edge:'rgba(130,0,255,'},
-  goal:  {fill:'rgba(0,16,6,',   edge:'rgba(0,255,110,'},
+  base:  { top:'#001c38', side:'#000e20', edge:[0,200,255]   },
+  plat:  { top:'#001428', side:'#000a18', edge:[0,170,255]   },
+  accent:{ top:'#120030', side:'#0a0020', edge:[160,0,255]   },
+  goal:  { top:'#003018', side:'#001a0c', edge:[0,255,130]   },
 };
 
 /* ═══════════════════════════════════════════
@@ -333,10 +334,10 @@ function project(wx,wy,wz){
 function drawSky(){
   const horizon=H()*.5-P.pitch*H()*.32;
   const sg=ctx.createLinearGradient(0,0,0,horizon);
-  sg.addColorStop(0,'#00000c'); sg.addColorStop(1,'#00011c');
+  sg.addColorStop(0,'#000418'); sg.addColorStop(1,'#00072e');
   ctx.fillStyle=sg; ctx.fillRect(0,0,W(),horizon);
   const fg=ctx.createLinearGradient(0,horizon,0,H());
-  fg.addColorStop(0,'#000116'); fg.addColorStop(1,'#000007');
+  fg.addColorStop(0,'#00061a'); fg.addColorStop(1,'#000210');
   ctx.fillStyle=fg; ctx.fillRect(0,horizon,W(),H()-horizon);
 }
 
@@ -350,27 +351,31 @@ function drawGrid(){
     if(rz<=0) continue;
     const sc=(W()*.5)/Math.tan(FOV*.5);
     const sx=W()*.5+rx/rz*sc;
-    const a=Math.max(0,.075-Math.abs(i)*.003);
+    const a=Math.max(0,.18-Math.abs(i)*.006);
     ctx.strokeStyle=`rgba(0,210,255,${a})`; ctx.lineWidth=.8;
     ctx.beginPath(); ctx.moveTo(W()*.5,horizon); ctx.lineTo(sx,H()); ctx.stroke();
   }
   for(let d=30;d<=700;d+=45){
     const sy=horizon+(H()-horizon)*(d/700);
-    const a=.065*(1-d/760);
+    const a=.14*(1-d/760);
     ctx.strokeStyle=`rgba(0,210,255,${a})`; ctx.lineWidth=.7;
     ctx.beginPath(); ctx.moveTo(0,sy); ctx.lineTo(W(),sy); ctx.stroke();
   }
   ctx.restore();
 }
 
+function hexToRgb(hex){
+  const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+  return [r,g,b];
+}
 function drawBox(b){
   const {x,y,z,w,h,d,col}=b;
   const C=COLORS[col]||COLORS.base;
+  const [er,eg,eb]=C.edge;
   const vs=[
     [x,y,z],[x+w,y,z],[x+w,y,z+d],[x,y,z+d],
     [x,y+h,z],[x+w,y+h,z],[x+w,y+h,z+d],[x,y+h,z+d],
-  ].map(([a,b,c])=>project(a,b,c));
-
+  ].map(([a,bb,c])=>project(a,bb,c));
   const faces=[
     {vi:[4,5,6,7],t:'top'},
     {vi:[0,1,5,4],t:'front'},
@@ -382,24 +387,33 @@ function drawBox(b){
     const pts=f.vi.map(i=>vs[i]);
     if(pts.some(p=>!p)) continue;
     const avgD=pts.reduce((s,p)=>s+p.dist,0)/pts.length;
-    if(avgD>580) continue;
-    const fog=Math.max(0,1-avgD/500);
-    // backface cull
+    if(avgD>950) continue;
+    const fog=Math.max(0,1-avgD/880);
+    if(fog<0.04) continue;
     const p0=pts[0],p1=pts[1],p2=pts[2];
     const cross=(p1.sx-p0.sx)*(p2.sy-p0.sy)-(p1.sy-p0.sy)*(p2.sx-p0.sx);
     if(f.t==='top' && cross<0) continue;
     if(f.t!=='top' && cross>0) continue;
-    const br=f.t==='top'?.9:f.t==='right'||f.t==='left'?.52:.38;
+    const isTop=f.t==='top';
+    const [fr,fg2,fb]=isTop?hexToRgb(C.top):hexToRgb(C.side);
+    const shade=isTop?1:(f.t==='front'||f.t==='back')?0.72:0.52;
+    const fa=Math.min(1,fog*1.6);
     ctx.save();
     ctx.beginPath();
     ctx.moveTo(pts[0].sx,pts[0].sy);
     for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].sx,pts[i].sy);
     ctx.closePath();
-    ctx.fillStyle=C.fill+(br*fog*.95)+')';
+    ctx.fillStyle='rgba('+Math.round(fr*shade)+','+Math.round(fg2*shade)+','+Math.round(fb*shade)+','+fa+')';
     ctx.fill();
-    ctx.strokeStyle=C.edge+(Math.min(.9,fog*1.1)*.68)+')';
-    ctx.lineWidth=f.t==='top'?1:.55;
+    const edgeA=isTop?Math.min(1,fog*1.9)*0.98:Math.min(1,fog*1.4)*0.62;
+    ctx.strokeStyle='rgba('+er+','+eg+','+eb+','+edgeA+')';
+    ctx.lineWidth=isTop?(avgD<100?2.4:1.5):1.0;
     ctx.stroke();
+    if(isTop&&avgD<220){
+      ctx.strokeStyle='rgba('+er+','+eg+','+eb+','+(0.45*(1-avgD/220))+')';
+      ctx.lineWidth=6;
+      ctx.stroke();
+    }
     ctx.restore();
   }
 }
@@ -413,7 +427,7 @@ function drawPillars(){
   for(const p of pillars){
     const bot=project(p.x,FLOOR,p.z), top=project(p.x,FLOOR+p.h,p.z);
     if(!bot||!top||bot.dist>900) continue;
-    const fog=Math.max(0,1-bot.dist/900)*.38;
+    const fog=Math.max(0,1-bot.dist/900)*.6;
     ctx.save();
     ctx.strokeStyle=`rgba(0,220,255,${fog})`;
     ctx.lineWidth=Math.max(.4,p.w*50/bot.dist);
