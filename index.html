@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WIRED // MOVEMENT</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap');
+
+  :root {
+    --lain-bg: #000005;
+    --lain-dark: #02020f;
+    --lain-blue: #0a0a2e;
+    --lain-cyan: #00f0ff;
+    --lain-purple: #7a00ff;
+    --lain-red: #ff003c;
+    --lain-white: #c8d8ff;
+    --lain-dim: #1a1a3a;
+    --lain-grid: rgba(0,240,255,0.05);
+    --scanline: rgba(0,0,0,0.4);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--lain-bg);
+    overflow: hidden;
+    font-family: 'Share Tech Mono', monospace;
+    color: var(--lain-cyan);
+    user-select: none;
+  }
+
+  canvas {
+    display: block;
+    position: absolute;
+    top: 0; left: 0;
+  }
+
+  #overlay {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  /* Scanlines */
+  #overlay::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      var(--scanline) 2px,
+      var(--scanline) 4px
+    );
+    pointer-events: none;
+    z-index: 20;
+    opacity: 0.3;
+  }
+
+  /* CRT vignette */
+  #overlay::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: radial-gradient(ellipse at center,
+      transparent 50%,
+      rgba(0,0,10,0.8) 100%
+    );
+    pointer-events: none;
+    z-index: 21;
+  }
+
+  #hud {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 15;
+    pointer-events: none;
+  }
+
+  #speedometer {
+    position: absolute;
+    bottom: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    font-family: 'VT323', monospace;
+    font-size: 48px;
+    color: var(--lain-cyan);
+    text-shadow: 0 0 10px var(--lain-cyan), 0 0 30px var(--lain-cyan);
+    letter-spacing: 4px;
+  }
+
+  #speedometer .label {
+    font-size: 14px;
+    letter-spacing: 8px;
+    color: rgba(0,240,255,0.4);
+    display: block;
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  #speed-bar-container {
+    position: absolute;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 300px;
+    height: 3px;
+    background: rgba(0,240,255,0.1);
+    border: 1px solid rgba(0,240,255,0.2);
+  }
+
+  #speed-bar {
+    height: 100%;
+    background: var(--lain-cyan);
+    box-shadow: 0 0 8px var(--lain-cyan);
+    transition: width 0.05s, background 0.1s;
+    width: 0%;
+  }
+
+  #crosshair {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 20px; height: 20px;
+    z-index: 16;
+  }
+
+  #crosshair::before, #crosshair::after {
+    content: '';
+    position: absolute;
+    background: rgba(0,240,255,0.7);
+    box-shadow: 0 0 4px var(--lain-cyan);
+  }
+  #crosshair::before {
+    width: 1px; height: 12px;
+    top: 4px; left: 9px;
+  }
+  #crosshair::after {
+    width: 12px; height: 1px;
+    top: 9px; left: 4px;
+  }
+
+  #top-bar {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    border-bottom: 1px solid rgba(0,240,255,0.1);
+    background: linear-gradient(180deg, rgba(0,0,20,0.8) 0%, transparent 100%);
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: rgba(0,240,255,0.5);
+    z-index: 16;
+  }
+
+  #top-bar .title {
+    font-family: 'VT323', monospace;
+    font-size: 22px;
+    color: var(--lain-cyan);
+    text-shadow: 0 0 10px var(--lain-cyan);
+    letter-spacing: 6px;
+  }
+
+  #bhop-counter {
+    position: absolute;
+    top: 50px;
+    right: 20px;
+    text-align: right;
+    font-family: 'VT323', monospace;
+    z-index: 16;
+  }
+
+  #bhop-counter .num {
+    font-size: 64px;
+    color: var(--lain-purple);
+    text-shadow: 0 0 20px var(--lain-purple);
+    display: block;
+    line-height: 1;
+  }
+
+  #bhop-counter .lbl {
+    font-size: 12px;
+    letter-spacing: 4px;
+    color: rgba(122,0,255,0.5);
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  #strafe-indicator {
+    position: absolute;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 200px;
+    display: flex;
+    gap: 4px;
+    z-index: 16;
+  }
+
+  .strafe-dot {
+    flex: 1;
+    height: 3px;
+    background: rgba(0,240,255,0.1);
+    transition: background 0.05s, box-shadow 0.05s;
+  }
+
+  .strafe-dot.active {
+    background: var(--lain-cyan);
+    box-shadow: 0 0 6px var(--lain-cyan);
+  }
+
+  #lain-text {
+    position: absolute;
+    bottom: 15px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'VT323', monospace;
+    font-size: 13px;
+    letter-spacing: 5px;
+    color: rgba(0,240,255,0.25);
+    white-space: nowrap;
+    z-index: 16;
+  }
+
+  #controls-hint {
+    position: absolute;
+    top: 50px;
+    left: 20px;
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: rgba(0,240,255,0.25);
+    line-height: 2;
+    z-index: 16;
+  }
+
+  #lock-screen {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0,0,10,0.95);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    cursor: pointer;
+  }
+
+  #lock-screen .main-title {
+    font-family: 'VT323', monospace;
+    font-size: clamp(48px, 10vw, 96px);
+    color: var(--lain-cyan);
+    text-shadow: 0 0 30px var(--lain-cyan), 0 0 60px rgba(0,240,255,0.3);
+    letter-spacing: 12px;
+    animation: flicker 4s infinite;
+    margin-bottom: 10px;
+  }
+
+  #lock-screen .subtitle {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    color: rgba(0,240,255,0.4);
+    letter-spacing: 8px;
+    margin-bottom: 60px;
+  }
+
+  #lock-screen .click-prompt {
+    font-family: 'VT323', monospace;
+    font-size: 28px;
+    color: var(--lain-purple);
+    letter-spacing: 6px;
+    text-shadow: 0 0 15px var(--lain-purple);
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  #lock-screen .controls-info {
+    position: absolute;
+    bottom: 40px;
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: rgba(0,240,255,0.2);
+    text-align: center;
+    line-height: 2.2;
+  }
+
+  #lock-screen .controls-info span {
+    color: rgba(0,240,255,0.5);
+  }
+
+  @keyframes flicker {
+    0%, 95%, 100% { opacity: 1; }
+    96% { opacity: 0.7; }
+    97% { opacity: 1; }
+    98% { opacity: 0.4; }
+    99% { opacity: 1; }
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+  }
+
+  #glitch-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none;
+    z-index: 50;
+    opacity: 0;
+  }
+
+  .strafe-gain {
+    position: absolute;
+    font-family: 'VT323', monospace;
+    font-size: 20px;
+    color: var(--lain-cyan);
+    text-shadow: 0 0 8px var(--lain-cyan);
+    pointer-events: none;
+    z-index: 17;
+    animation: floatUp 0.8s ease-out forwards;
+  }
+
+  @keyframes floatUp {
+    0% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(-40px); }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="gameCanvas"></canvas>
+<div id="overlay"></div>
+<div id="glitch-overlay"></div>
+
+<div id="hud">
+  <div id="top-bar">
+    <div>SYS::WIRED</div>
+    <div class="title">MOVEMENT</div>
+    <div id="fps-counter">00 FPS</div>
+  </div>
+
+  <div id="controls-hint">
+    WASD — MOVE<br>
+    SPACE — JUMP<br>
+    MOUSE — LOOK<br>
+    SHIFT — SPRINT<br>
+    <br>
+    <span style="color:rgba(122,0,255,0.4)">BHOP: SPAM SPACE</span><br>
+    <span style="color:rgba(122,0,255,0.4)">AIR STRAFE: A/D</span>
+  </div>
+
+  <div id="bhop-counter">
+    <span class="num" id="bhop-num">0</span>
+    <span class="lbl">BHOPS</span>
+  </div>
+
+  <div id="crosshair"></div>
+
+  <div id="strafe-indicator">
+    <div class="strafe-dot" id="sd-left"></div>
+    <div class="strafe-dot" id="sd-center"></div>
+    <div class="strafe-dot" id="sd-right"></div>
+  </div>
+
+  <div id="speedometer">
+    <span class="label">UNITS/S</span>
+    <span id="speed-val">000</span>
+  </div>
+
+  <div id="speed-bar-container">
+    <div id="speed-bar"></div>
+  </div>
+
+  <div id="lain-text">PRESENT_DAY . PRESENT_TIME . ARE_YOU_CONNECTED</div>
+</div>
+
+<div id="lock-screen">
+  <div class="main-title">WIRED</div>
+  <div class="subtitle">MOVEMENT SYSTEM v1.6</div>
+  <div class="click-prompt">[ CLICK TO CONNECT ]</div>
+  <div class="controls-info">
+    <span>WASD</span> MOVE &nbsp;|&nbsp; <span>SPACE</span> JUMP &nbsp;|&nbsp; <span>MOUSE</span> LOOK<br>
+    <span>SHIFT</span> SPRINT &nbsp;|&nbsp; <span>A/D IN AIR</span> AIR STRAFE<br>
+    BUNNYHOP: LAND + JUMP + STRAFE = INFINITE SPEED<br>
+    <br>
+    <span style="color:rgba(0,240,255,0.15)">THE WIRED IS ALL AROUND YOU</span>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const lockScreen = document.getElementById('lock-screen');
+const speedVal = document.getElementById('speed-val');
+const speedBar = document.getElementById('speed-bar');
+const bhopNum = document.getElementById('bhop-num');
+const fpsCounter = document.getElementById('fps-counter');
+const glitchOverlay = document.getElementById('glitch-overlay');
+
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+window.addEventListener('resize', () => {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+});
+
+// ─── PLAYER STATE ──────────────────────────────────────────────────
+const player = {
+  x: 0, y: 64, z: 0,
+  velX: 0, velY: 0, velZ: 0,
+  yaw: 0, pitch: 0,
+  onGround: false,
+  bhopCount: 0,
+  lastJumpTime: 0,
+  sprintMult: 1,
+};
+
+// ─── CS-STYLE CONSTANTS ────────────────────────────────────────────
+const GRAVITY         = 800;
+const GROUND_LEVEL    = 64;
+const JUMP_FORCE      = 290;
+const MAX_SPEED       = 320;
+const SPRINT_SPEED    = 380;
+const AIR_SPEED       = 60;         // air accel cap per tick
+const AIR_ACCEL       = 10;         // air acceleration multiplier
+const GROUND_ACCEL    = 10;
+const FRICTION        = 6;
+const BHOP_WINDOW     = 80;         // ms window for perfect bhop
+const MAX_BHOP_SPEED  = 1200;       // bhop speed cap
+const STRAFE_GAIN     = 28;         // speed gain per good strafe
+
+// ─── INPUT ─────────────────────────────────────────────────────────
+const keys = {};
+let mouseX = 0, mouseY = 0;
+let locked = false;
+let jumpPressed = false, jumpPressedPrev = false;
+let spaceJustDown = false;
+
+document.addEventListener('keydown', e => {
+  if (!keys[e.code]) {
+    if (e.code === 'Space') spaceJustDown = true;
+  }
+  keys[e.code] = true;
+  // Only prevent default when locked (don't block browser UI before that)
+  if (locked) e.preventDefault();
+});
+document.addEventListener('keyup', e => {
+  keys[e.code] = false;
+  if (e.code === 'Space') spaceJustDown = false;
+});
+
+document.addEventListener('mousemove', e => {
+  if (!locked) return;
+  player.yaw   += e.movementX * 0.0018;
+  player.pitch -= e.movementY * 0.0018;
+  player.pitch  = Math.max(-1.4, Math.min(1.4, player.pitch));
+});
+
+function requestLock() {
+  const req = document.body.requestPointerLock
+    || document.body.mozRequestPointerLock
+    || document.body.webkitRequestPointerLock;
+  if (req) req.call(document.body);
+}
+
+lockScreen.addEventListener('click', requestLock);
+// Also allow clicking the canvas to re-lock if focus is lost
+canvas.addEventListener('click', () => { if (!locked) requestLock(); });
+
+document.addEventListener('pointerlockchange', onLockChange);
+document.addEventListener('mozpointerlockchange', onLockChange);
+document.addEventListener('webkitpointerlockchange', onLockChange);
+
+function onLockChange() {
+  locked = !!(document.pointerLockElement || document.mozPointerLockElement || document.webkitPointerLockElement);
+  if (locked) {
+    lockScreen.style.display = 'none';
+  } else {
+    lockScreen.style.display = 'flex';
+    // Clear all keys so nothing stays "held" after losing lock
+    Object.keys(keys).forEach(k => keys[k] = false);
+    spaceJustDown = false;
+  }
+}
+
+document.addEventListener('pointerlockerror', () => {
+  lockScreen.querySelector('.click-prompt').textContent = '[ CLICK AGAIN TO CONNECT ]';
+});
+document.addEventListener('mozpointerlockerror', () => {
+  lockScreen.querySelector('.click-prompt').textContent = '[ CLICK AGAIN TO CONNECT ]';
+});
+
+// ─── WORLD MAP ─────────────────────────────────────────────────────
+// Boxes: {x, y, z, w, h, d} — y is up
+const boxes = [
+  // Ground slabs — large infinite-ish floor tiles
+  { x: -500, y: 0, z: -500, w: 1000, h: 8, d: 1000 },
+
+  // Platforms
+  { x: 100, y: 8,  z: 0,   w: 80,  h: 12, d: 80  },
+  { x: 200, y: 20, z: 60,  w: 60,  h: 8,  d: 60  },
+  { x: 300, y: 35, z: 10,  w: 50,  h: 8,  d: 50  },
+  { x: 380, y: 50, z: -60, w: 60,  h: 8,  d: 60  },
+  { x: 450, y: 65, z: 30,  w: 50,  h: 8,  d: 50  },
+  { x: -150, y: 10, z: 80, w: 70,  h: 8,  d: 70  },
+  { x: -250, y: 25, z: -50,w: 60,  h: 8,  d: 60  },
+  { x: -350, y: 40, z: 40, w: 55,  h: 8,  d: 55  },
+  { x: 50, y: 8,  z: -150, w: 80,  h: 8,  d: 80  },
+  { x: 150, y: 20, z: -220,w: 70,  h: 8,  d: 70  },
+  { x: -100, y: 8, z: -180,w: 60,  h: 8,  d: 60  },
+
+  // Ramps (tall thin pillars to jump over)
+  { x: 60,  y: 8, z: 40,   w: 15,  h: 40, d: 15  },
+  { x: -60, y: 8, z: -60,  w: 15,  h: 30, d: 15  },
+  { x: 180, y: 8, z: -50,  w: 15,  h: 50, d: 15  },
+
+  // Long corridors for bhop runs
+  { x: -400, y: 0, z: -20, w: 200, h: 8, d: 40   },
+  { x: 200,  y: 0, z: 200, w: 400, h: 8, d: 40   },
+];
+
+// ─── RAYCASTING RENDERER ───────────────────────────────────────────
+const W = () => canvas.width;
+const H = () => canvas.height;
+const FOV = Math.PI / 2.2;
+
+// Sky color bands
+function drawSky() {
+  const grad = ctx.createLinearGradient(0, 0, 0, H() * 0.55);
+  grad.addColorStop(0,   '#000008');
+  grad.addColorStop(0.4, '#000515');
+  grad.addColorStop(1,   '#020028');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W(), H() * 0.55);
+}
+
+function drawFloor() {
+  const grad = ctx.createLinearGradient(0, H() * 0.55, 0, H());
+  grad.addColorStop(0,   '#010010');
+  grad.addColorStop(1,   '#000005');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, H() * 0.55, W(), H() * 0.45);
+}
+
+// Grid perspective floor
+function drawGrid() {
+  ctx.save();
+  ctx.strokeStyle = 'rgba(0,240,255,0.07)';
+  ctx.lineWidth = 1;
+
+  const horizon = H() * 0.5 - player.pitch * H() * 0.3;
+  const vpX = W() / 2;
+
+  // Perspective lines going to vanishing point
+  for (let i = -12; i <= 12; i++) {
+    const worldX = i * 50;
+    // Project world point (worldX, 0, far) to screen
+    const dx = worldX - player.x;
+    const dz = 600;
+    const cos = Math.cos(-player.yaw);
+    const sin = Math.sin(-player.yaw);
+    const rx = dx * cos - dz * sin;
+    const rz = dx * sin + dz * cos;
+    if (rz <= 0) continue;
+
+    const screenX = vpX + (rx / rz) * (W() / (2 * Math.tan(FOV / 2)));
+    ctx.beginPath();
+    ctx.moveTo(vpX, horizon);
+    ctx.lineTo(screenX, H());
+    ctx.stroke();
+  }
+
+  // Horizontal lines
+  for (let d = 20; d <= 600; d += 40) {
+    const rz = d;
+    const projY = horizon + ((player.y - GROUND_LEVEL + 8) / rz) * (W() / (2 * Math.tan(FOV / 2)));
+    const screenY = H() * 0.5 + (H() * 0.5 - horizon) * (d / 600) + horizon * (1 - d/600);
+    // simple depth-based y
+    const sy = horizon + (H() - horizon) * (d / 600);
+    const alpha = 0.06 * (1 - d / 700);
+    ctx.strokeStyle = `rgba(0,240,255,${alpha})`;
+    ctx.beginPath();
+    ctx.moveTo(0, sy);
+    ctx.lineTo(W(), sy);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+// Project 3D world point to 2D screen
+function project(wx, wy, wz) {
+  const dx = wx - player.x;
+  const dy = wy - player.y;
+  const dz = wz - player.z;
+
+  const cosY = Math.cos(-player.yaw);
+  const sinY = Math.sin(-player.yaw);
+  const rx = dx * cosY - dz * sinY;
+  const rz = dx * sinY + dz * cosY;
+
+  const cosPitch = Math.cos(-player.pitch);
+  const sinPitch = Math.sin(-player.pitch);
+  const ry2 = dy * cosPitch - rz * sinPitch;
+  const rz2 = dy * sinPitch + rz * cosPitch;
+
+  if (rz2 <= 0.1) return null;
+
+  const fovScale = (W() * 0.5) / Math.tan(FOV / 2);
+  const sx = W() * 0.5 + (rx / rz2) * fovScale;
+  const sy = H() * 0.5 - (ry2 / rz2) * fovScale;
+  return { x: sx, y: sy, z: rz2 };
+}
+
+function drawBox(box) {
+  const { x, y, z, w, h, d } = box;
+  // Box faces: we'll draw the visible faces
+  const corners = [
+    [x,   y,   z],
+    [x+w, y,   z],
+    [x+w, y,   z+d],
+    [x,   y,   z+d],
+    [x,   y+h, z],
+    [x+w, y+h, z],
+    [x+w, y+h, z+d],
+    [x,   y+h, z+d],
+  ];
+
+  const proj = corners.map(([cx,cy,cz]) => project(cx, cy, cz));
+
+  // Faces: [indices, normal indicator]
+  const faces = [
+    { verts: [4,5,6,7], type: 'top' },
+    { verts: [0,1,5,4], type: 'front' },
+    { verts: [1,2,6,5], type: 'right' },
+    { verts: [2,3,7,6], type: 'back' },
+    { verts: [3,0,4,7], type: 'left' },
+  ];
+
+  for (const face of faces) {
+    const pts = face.verts.map(i => proj[i]);
+    if (pts.some(p => !p)) continue;
+
+    // Backface check — if all pts behind camera, skip
+    const avgZ = pts.reduce((s,p) => s + p.z, 0) / pts.length;
+    if (avgZ <= 0) continue;
+
+    // Compute screen area for backface culling
+    const p0 = pts[0], p1 = pts[1], p2 = pts[2];
+    const cross = (p1.x - p0.x) * (p2.y - p0.y) - (p1.y - p0.y) * (p2.x - p0.x);
+    if (face.type !== 'top' && cross > 0) continue;
+    if (face.type === 'top' && cross < 0) continue;
+
+    const dist = avgZ;
+    const fog = Math.max(0, 1 - dist / 450);
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.closePath();
+
+    let faceColor;
+    if (face.type === 'top') {
+      faceColor = `rgba(0,10,30,${0.9 * fog})`;
+    } else if (face.type === 'front' || face.type === 'back') {
+      faceColor = `rgba(0,5,20,${0.85 * fog})`;
+    } else {
+      faceColor = `rgba(0,3,15,${0.8 * fog})`;
+    }
+
+    ctx.fillStyle = faceColor;
+    ctx.fill();
+
+    // Edge glow
+    const edgeAlpha = fog * 0.6;
+    ctx.strokeStyle = `rgba(0,240,255,${edgeAlpha * 0.4})`;
+    ctx.lineWidth = 0.7;
+    ctx.stroke();
+
+    // Top face gets grid lines
+    if (face.type === 'top' && fog > 0.2) {
+      ctx.strokeStyle = `rgba(0,240,255,${edgeAlpha * 0.15})`;
+      ctx.lineWidth = 0.4;
+      // just stroke again with thinner line for inner grid suggestion
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+}
+
+// Draw world objects / floating orbs (collectibles feel)
+const orbs = [];
+for (let i = 0; i < 25; i++) {
+  orbs.push({
+    x: (Math.random() - 0.5) * 800,
+    y: 80 + Math.random() * 150,
+    z: (Math.random() - 0.5) * 800,
+    phase: Math.random() * Math.PI * 2,
+  });
+}
+
+function drawOrbs(t) {
+  for (const orb of orbs) {
+    const floatY = orb.y + Math.sin(t * 1.2 + orb.phase) * 8;
+    const p = project(orb.x, floatY, orb.z);
+    if (!p || p.z < 1 || p.z > 400) continue;
+
+    const size = Math.max(1, 5 * (80 / p.z));
+    const fog = Math.max(0, 1 - p.z / 400);
+    const alpha = fog * 0.8;
+
+    ctx.save();
+    const grd = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, size * 2);
+    grd.addColorStop(0, `rgba(0,240,255,${alpha})`);
+    grd.addColorStop(0.5, `rgba(122,0,255,${alpha * 0.5})`);
+    grd.addColorStop(1, 'transparent');
+    ctx.fillStyle = grd;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, size * 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+// Distant "wired" structures — vertical pillars
+const pillars = [];
+for (let i = 0; i < 40; i++) {
+  pillars.push({
+    x: (Math.random() - 0.5) * 1500,
+    z: (Math.random() - 0.5) * 1500,
+    h: 50 + Math.random() * 200,
+    w: 3 + Math.random() * 6,
+  });
+}
+
+function drawPillars() {
+  for (const p of pillars) {
+    const bot = project(p.x, GROUND_LEVEL, p.z);
+    const top = project(p.x, GROUND_LEVEL + p.h, p.z);
+    if (!bot || !top || bot.z > 800) continue;
+    const fog = Math.max(0, 1 - bot.z / 800) * 0.4;
+    const screenW = Math.max(0.5, p.w * (60 / bot.z));
+
+    ctx.save();
+    ctx.strokeStyle = `rgba(0,240,255,${fog})`;
+    ctx.lineWidth = screenW;
+    ctx.beginPath();
+    ctx.moveTo(bot.x, bot.y);
+    ctx.lineTo(top.x, top.y);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+// ─── PHYSICS ───────────────────────────────────────────────────────
+function getGroundHeight(px, pz) {
+  let maxY = 0;
+  for (const box of boxes) {
+    if (px >= box.x - 16 && px <= box.x + box.w + 16 &&
+        pz >= box.z - 16 && pz <= box.z + box.d + 16) {
+      if (box.y + box.h > maxY) maxY = box.y + box.h;
+    }
+  }
+  return maxY;
+}
+
+function checkBoxCollision(px, py, pz) {
+  // Check all boxes, return highest surface player stands on
+  const RADIUS = 16;
+  const HEIGHT = 72;
+  let standY = null;
+
+  for (const box of boxes) {
+    const inX = px + RADIUS > box.x && px - RADIUS < box.x + box.w;
+    const inZ = pz + RADIUS > box.z && pz - RADIUS < box.z + box.d;
+    const inY = py < box.y + box.h + 2 && py + HEIGHT > box.y;
+
+    if (inX && inZ && inY) {
+      // Landing on top
+      if (player.velY <= 0 && py >= box.y + box.h - 4) {
+        if (standY === null || box.y + box.h > standY) {
+          standY = box.y + box.h;
+        }
+      }
+    }
+  }
+  return standY;
+}
+
+// CS-style movement physics
+function applyFriction(dt) {
+  if (!player.onGround) return;
+  const speed = Math.sqrt(player.velX**2 + player.velZ**2);
+  if (speed < 1) { player.velX = 0; player.velZ = 0; return; }
+  const drop = speed * FRICTION * dt;
+  const newSpeed = Math.max(0, speed - drop);
+  player.velX *= newSpeed / speed;
+  player.velZ *= newSpeed / speed;
+}
+
+function accelerate(wishDirX, wishDirZ, wishSpeed, accel, dt) {
+  const currentSpeed = player.velX * wishDirX + player.velZ * wishDirZ;
+  const addSpeed = wishSpeed - currentSpeed;
+  if (addSpeed <= 0) return;
+  let accelSpeed = accel * wishSpeed * dt;
+  if (accelSpeed > addSpeed) accelSpeed = addSpeed;
+  player.velX += accelSpeed * wishDirX;
+  player.velZ += accelSpeed * wishDirZ;
+}
+
+let lastStrafeDir = 0;
+let strafeGainAnim = 0;
+
+function updatePhysics(dt) {
+  const cos = Math.cos(player.yaw);
+  const sin = Math.sin(player.yaw);
+
+  let fwd = 0, side = 0;
+  if (keys['KeyW']) fwd += 1;
+  if (keys['KeyS']) fwd -= 1;
+  if (keys['KeyA']) side -= 1;
+  if (keys['KeyD']) side += 1;
+
+  const sprint = keys['ShiftLeft'] || keys['ShiftRight'];
+  const maxSpd = sprint ? SPRINT_SPEED : MAX_SPEED;
+
+  // Wish direction in world space
+  let wdx = fwd * cos + side * sin;
+  let wdz = fwd * -sin + side * cos;
+  const wdLen = Math.sqrt(wdx**2 + wdz**2);
+  if (wdLen > 0) { wdx /= wdLen; wdz /= wdLen; }
+
+  if (player.onGround) {
+    applyFriction(dt);
+    if (wdLen > 0) accelerate(wdx, wdz, maxSpd, GROUND_ACCEL, dt);
+  } else {
+    // AIR STRAFE — CS-style air acceleration
+    if (wdLen > 0) {
+      const currentVel = Math.sqrt(player.velX**2 + player.velZ**2);
+      const wishSpd = Math.min(AIR_SPEED, maxSpd);
+      accelerate(wdx, wdz, wishSpd, AIR_ACCEL, dt);
+
+      // Track strafe direction for indicator
+      if (side < 0) lastStrafeDir = -1;
+      else if (side > 0) lastStrafeDir = 1;
+      else lastStrafeDir = 0;
+
+      // Strafe gain visual
+      const newVel = Math.sqrt(player.velX**2 + player.velZ**2);
+      if (newVel > currentVel + 1 && currentVel > 200) {
+        strafeGainAnim = 1;
+      }
+    } else {
+      lastStrafeDir = 0;
+    }
+  }
+
+  // Gravity
+  player.velY -= GRAVITY * dt;
+
+  // Jump
+  if (spaceJustDown && player.onGround) {
+    player.velY = JUMP_FORCE;
+    player.onGround = false;
+
+    const now = performance.now();
+    const timeSinceLast = now - player.lastJumpTime;
+    if (timeSinceLast < BHOP_WINDOW + 200 && timeSinceLast > 10) {
+      player.bhopCount++;
+      bhopNum.textContent = player.bhopCount;
+      spawnGainText();
+    } else {
+      player.bhopCount = 0;
+      bhopNum.textContent = '0';
+    }
+    player.lastJumpTime = now;
+  }
+  spaceJustDown = false;
+
+  // Speed cap (bhop lets you exceed slightly)
+  const maxBhopSpd = MAX_BHOP_SPEED;
+  const horizSpeed = Math.sqrt(player.velX**2 + player.velZ**2);
+  if (horizSpeed > maxBhopSpd) {
+    player.velX = (player.velX / horizSpeed) * maxBhopSpd;
+    player.velZ = (player.velZ / horizSpeed) * maxBhopSpd;
+  }
+
+  // Move
+  player.x += player.velX * dt;
+  player.y += player.velY * dt;
+  player.z += player.velZ * dt;
+
+  // Ground detection
+  const standY = checkBoxCollision(player.x, player.y, player.z);
+  if (standY !== null && player.velY <= 0) {
+    player.y = standY;
+    player.velY = 0;
+    player.onGround = true;
+  } else {
+    player.onGround = false;
+  }
+
+  // Absolute floor
+  if (player.y <= GROUND_LEVEL) {
+    if (player.y < GROUND_LEVEL && player.velY < 0) {
+      player.y = GROUND_LEVEL;
+      player.velY = 0;
+      player.onGround = true;
+    }
+  }
+}
+
+// ─── GAIN TEXT ─────────────────────────────────────────────────────
+function spawnGainText() {
+  const el = document.createElement('div');
+  el.className = 'strafe-gain';
+  el.textContent = '+BHOP';
+  el.style.left = (W()/2 + (Math.random()-0.5)*80) + 'px';
+  el.style.top  = (H()*0.4 + Math.random()*40) + 'px';
+  document.getElementById('hud').appendChild(el);
+  setTimeout(() => el.remove(), 800);
+}
+
+// ─── STRAFE INDICATOR UPDATE ────────────────────────────────────────
+const sdLeft   = document.getElementById('sd-left');
+const sdCenter = document.getElementById('sd-center');
+const sdRight  = document.getElementById('sd-right');
+
+function updateStrafeIndicator() {
+  sdLeft.classList.remove('active');
+  sdCenter.classList.remove('active');
+  sdRight.classList.remove('active');
+  if (!player.onGround) {
+    if (lastStrafeDir < 0) sdLeft.classList.add('active');
+    else if (lastStrafeDir > 0) sdRight.classList.add('active');
+    else sdCenter.classList.add('active');
+  }
+}
+
+// ─── GLITCH EFFECT ─────────────────────────────────────────────────
+let glitchTimer = 0;
+function maybeGlitch(t, speed) {
+  glitchTimer -= 0.016;
+  if (glitchTimer <= 0 && speed > 400) {
+    glitchTimer = 2 + Math.random() * 4;
+    const rows = 3 + Math.floor(Math.random() * 5);
+    let html = '';
+    for (let i = 0; i < rows; i++) {
+      const top = Math.random() * 100;
+      const h   = 2 + Math.random() * 8;
+      const off = (Math.random() - 0.5) * 20;
+      const col = Math.random() > 0.5 ? '#00f0ff' : '#7a00ff';
+      html += `<div style="position:absolute;top:${top}%;left:0;right:0;height:${h}px;background:${col};opacity:0.05;transform:translateX(${off}px)"></div>`;
+    }
+    glitchOverlay.innerHTML = html;
+    glitchOverlay.style.opacity = '1';
+    setTimeout(() => { glitchOverlay.style.opacity = '0'; glitchOverlay.innerHTML = ''; }, 80);
+  }
+}
+
+// ─── HUD UPDATE ────────────────────────────────────────────────────
+let lastTime = performance.now();
+let fps = 0;
+let fpsSmooth = 60;
+let frameCount = 0;
+let fpsTimer = 0;
+
+function updateHUD(dt, speed) {
+  speedVal.textContent = Math.round(speed).toString().padStart(3, '0');
+  const pct = Math.min(100, (speed / MAX_BHOP_SPEED) * 100);
+  speedBar.style.width = pct + '%';
+
+  // Color speed bar based on speed tier
+  if (speed < MAX_SPEED * 1.2) {
+    speedBar.style.background = '#00f0ff';
+    speedBar.style.boxShadow  = '0 0 8px #00f0ff';
+  } else if (speed < MAX_BHOP_SPEED * 0.6) {
+    speedBar.style.background = '#7a00ff';
+    speedBar.style.boxShadow  = '0 0 8px #7a00ff';
+  } else {
+    speedBar.style.background = '#ff003c';
+    speedBar.style.boxShadow  = '0 0 12px #ff003c';
+  }
+
+  fpsTimer += dt;
+  frameCount++;
+  if (fpsTimer >= 0.5) {
+    fpsSmooth = frameCount / fpsTimer;
+    frameCount = 0;
+    fpsTimer = 0;
+    fpsCounter.textContent = Math.round(fpsSmooth).toString().padStart(2,'0') + ' FPS';
+  }
+}
+
+// ─── MAIN LOOP ─────────────────────────────────────────────────────
+function render(t) {
+  const now = performance.now();
+  const dt  = Math.min((now - lastTime) / 1000, 0.05);
+  lastTime  = now;
+
+  if (locked) updatePhysics(dt);
+
+  // Horizontal speed for HUD
+  const horizSpeed = Math.sqrt(player.velX**2 + player.velZ**2);
+
+  // Draw
+  ctx.clearRect(0, 0, W(), H());
+  drawSky();
+  drawFloor();
+  drawGrid();
+  drawPillars();
+
+  // Sort boxes by distance
+  const sorted = [...boxes].sort((a, b) => {
+    const da = (a.x + a.w/2 - player.x)**2 + (a.z + a.d/2 - player.z)**2;
+    const db = (b.x + b.w/2 - player.x)**2 + (b.z + b.d/2 - player.z)**2;
+    return db - da;
+  });
+  sorted.forEach(drawBox);
+
+  drawOrbs(now / 1000);
+
+  // Head bob
+  if (player.onGround && horizSpeed > 50) {
+    const bob = Math.sin(now * 0.008) * 0.008 * Math.min(horizSpeed / MAX_SPEED, 1);
+    player.pitch += bob * 0.01;
+  }
+
+  updateHUD(dt, horizSpeed);
+  updateStrafeIndicator();
+  maybeGlitch(now / 1000, horizSpeed);
+
+  requestAnimationFrame(render);
+}
+
+requestAnimationFrame(render);
+</script>
+</body>
+</html>
