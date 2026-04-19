@@ -209,8 +209,8 @@ document.addEventListener('wheel', e=>{
 },{passive:false});
 document.addEventListener('mousemove', e=>{
   if (!locked) return;
-  P.yaw   += e.movementX * 0.002;
-  P.pitch -= e.movementY * 0.002;
+  P.yaw   -= e.movementX * 0.002;
+  P.pitch += e.movementY * 0.002;
   P.pitch  = Math.max(-1.35, Math.min(1.35, P.pitch));
 });
 
@@ -266,7 +266,7 @@ function physics(dt){
   if(K['KeyA']) sd-=1; if(K['KeyD']) sd+=1;
   const sprint = K['ShiftLeft']||K['ShiftRight'];
 
-  let wdx=fw*cos+sd*sin, wdz=fw*-sin+sd*cos;
+  let wdx=fw*sin+sd*cos, wdz=fw*cos-sd*sin;
   const wdl=Math.hypot(wdx,wdz);
   if(wdl>0){wdx/=wdl; wdz/=wdl;}
 
